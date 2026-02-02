@@ -5,6 +5,7 @@ out
 dist
 build
 coverage
+.turbo
 .env
 .env.local
 .env.*.local
