@@ -1,0 +1,8 @@
+{
+  "name": "@template/service-master-data",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

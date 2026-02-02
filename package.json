@@ -1,0 +1,26 @@
+{
+  "name": "template-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write .",
+    "graph": "depcruise src --include-only \"^services\" --output-type dot | dot -T svg > architecture.svg",
+    "graph:archi": "depcruise src --include-only \"^services\" --output-type archi | dot -T svg > high-level-architecture.svg",
+    "check:arch": "depcruise src --include-only \"^services\" --config .dependency-cruiser.cjs",
+    "diagram:render": "mmdc -i docs/guide/diagrams/architecture.mmd -o docs/guide/diagrams/architecture.svg"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^10.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "dependency-cruiser": "^17.3.7",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.11",
+    "prettier": "^3.2.5",
+    "turbo": "^2.8.1",
+    "typescript": "^5.9.0"
+  }
+}

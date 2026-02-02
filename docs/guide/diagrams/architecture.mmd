@@ -1,0 +1,36 @@
+%% Mermaid diagrams for template architecture
+
+flowchart LR
+  subgraph Frontend
+    Web[App Web]
+    Mobile[App Móvil]
+  end
+
+  subgraph Gateway
+    GW[BFF/PUERTA DE ENLACE API]
+  end
+
+  subgraph Services
+    ID[IAM]
+    SA[Servicio A]
+    SB[Servicio B]
+    SC[Servicio C]
+  end
+
+  Web -->|REST| GW
+  Mobile -->|REST| GW
+  GW -->|Autorización/Políticas| ID
+  GW -->|REST| SA
+  GW -->|REST| SB
+  GW -->|REST| SC
+
+  SA -->|eventos| SC
+  SB -->|eventos| SC
+
+  classDef svc fill:#eef,stroke:#567;
+  classDef gw fill:#fdf6e3,stroke:#b58900;
+  classDef fe fill:#f5f5f5,stroke:#777;
+
+  class GW gw
+  class Web,Mobile fe
+  class ID,SA,SB,SC svc

@@ -1,0 +1,21 @@
+%% Diagrama de flujo de eventos (outbox) - genérico
+flowchart TB
+  subgraph Core
+    b1[Comando: crear recurso]
+    b2[TX: persistir recurso + evento outbox]
+    b3[Worker outbox publica recurso.creado]
+  end
+
+  subgraph Bus
+    bus[(Bus de eventos)]
+  end
+
+  subgraph Consumers
+    c1[Servicio C consume recurso.creado -> actualiza proyecciones]
+    c2[Notificaciones envía aviso]
+    c3[Auditoría registra acción]
+  end
+
+  b1 --> b2 --> b3 --> bus --> c1
+  bus --> c2
+  bus --> c3

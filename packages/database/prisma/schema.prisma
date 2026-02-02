@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// FLEXIBILITY NOTE:
+// This configured for PostgreSQL.
+// To switch to MySQL/MariaDB: Change provider to "mysql"
+// To switch to SQLite: Change provider to "sqlite" (and remove @db.Text annotations if irrelevant)
+// To switch to SQL Server: Change provider to "sqlserver"
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- CORE IDENTITY MODELS (Shared) ---
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("USER") // "ADMIN", "ACCOUNTANT"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+// --- AUDIT SYSTEM (Shared) ---
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  action        String
+  entity        String
+  entityId      String
+  previousValue String?  @db.Text
+  newValue      String?  @db.Text
+  performedBy   String
+  timestamp     DateTime @default(now())
+  
+  user          User     @relation(fields: [performedBy], references: [id])
+
+  @@map("audit_logs")
+}

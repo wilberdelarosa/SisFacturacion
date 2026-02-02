@@ -1,0 +1,10 @@
+{
+  "name": "@template/shared-kernel",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --ext .ts"
+  }
+}
