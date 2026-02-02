@@ -7,12 +7,14 @@ import { useEffect, useState } from "react";
 export function Topbar() {
   const router = useRouter();
   const [user, setUser] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     currentSession().then((session) => {
       if (session) {
         setUser(session.user);
+        setEmail(session.email || "");
       }
     });
   }, []);
@@ -23,13 +25,13 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-800 bg-slate-900 px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
       <div className="flex items-center gap-4">
         <div className="relative w-96">
           <input
             type="text"
             placeholder="Buscar... (Cmd+K)"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 pl-10 text-sm text-slate-300 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 pl-10 text-sm text-slate-800 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <svg
             className="absolute left-3 top-2.5 h-5 w-5 text-slate-500"
@@ -48,7 +50,7 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-4">
-        <button className="relative rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white">
+        <button className="relative rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -60,31 +62,17 @@ export function Topbar() {
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500"></span>
         </button>
 
-        <button
-          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-          title="Modo oscuro"
-        >
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-            />
-          </svg>
-        </button>
-
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-800"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-100"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
               {user.charAt(0).toUpperCase()}
             </div>
             <div className="text-left">
-              <div className="text-sm font-medium text-white">{user || "Usuario"}</div>
-              <div className="text-xs text-slate-400">Administrador</div>
+              <div className="text-sm font-medium text-slate-900">{user || "Usuario"}</div>
+              <div className="text-xs text-slate-500">{email || "Cuenta activa"}</div>
             </div>
             <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -92,12 +80,12 @@ export function Topbar() {
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 py-2 shadow-xl">
-              <div className="border-b border-slate-700 px-4 py-3">
-                <p className="text-sm font-medium text-white">{user}</p>
-                <p className="text-xs text-slate-400">admin@alito.com</p>
+            <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-200 bg-white py-2 shadow-xl">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <p className="text-sm font-medium text-slate-900">{user}</p>
+                <p className="text-xs text-slate-500">{email || "Sesión activa"}</p>
               </div>
-              <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white">
+              <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -108,7 +96,7 @@ export function Topbar() {
                 </svg>
                 Mi perfil
               </button>
-              <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white">
+              <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -120,10 +108,10 @@ export function Topbar() {
                 </svg>
                 Configuración
               </button>
-              <div className="my-1 border-t border-slate-700"></div>
+              <div className="my-1 border-t border-slate-200"></div>
               <button
                 onClick={handleLogout}
-                className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-400 transition-colors hover:bg-slate-700 hover:text-red-300"
+                className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path

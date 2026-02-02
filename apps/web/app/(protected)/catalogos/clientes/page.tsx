@@ -224,8 +224,8 @@ export default function ClientesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Clientes</h1>
-          <p className="mt-1 text-sm text-slate-400">Gestiona tu cartera de clientes</p>
+          <h1 className="text-2xl font-bold text-slate-900">Clientes</h1>
+          <p className="mt-1 text-sm text-slate-600">Gestiona tu cartera de clientes</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>
           <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -235,7 +235,7 @@ export default function ClientesPage() {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
           <div className="flex-1">
             <Input
@@ -257,8 +257,8 @@ export default function ClientesPage() {
           </Button>
         </div>
 
-        {error && <p className="mb-3 text-sm text-amber-400">{error}</p>}
-        {loading && <p className="mb-3 text-sm text-slate-400">Cargando clientes...</p>}
+        {error && <p className="mb-3 text-sm text-amber-700">{error}</p>}
+        {loading && <p className="mb-3 text-sm text-slate-600">Cargando clientes...</p>}
 
         <Table columns={columns} data={filteredClientes} emptyMessage="No hay clientes registrados" />
       </div>
@@ -306,7 +306,7 @@ export default function ClientesPage() {
           </div>
 
           <div className="border-t border-slate-700 pt-4">
-            <h3 className="mb-3 text-sm font-semibold text-white">Configuración de Crédito</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-900">Configuración de Crédito</h3>
             <div className="grid gap-4 md:grid-cols-3">
               <Select
                 label="Tipo de Pago"
@@ -334,7 +334,7 @@ export default function ClientesPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-slate-700 pt-4">
+          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>
               Cancelar
             </Button>

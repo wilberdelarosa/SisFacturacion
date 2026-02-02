@@ -1,20 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Select } from "../../../../components/ui/Select";
 import { Table } from "../../../../components/ui/Table";
-import Link from "next/link";
+import { currentSession } from "../../../../lib/auth";
+import { supabase } from "../../../../lib/supabaseClient";
 
 type Factura = {
   id: string;
-  numero: string;
-  cliente: string;
-  fecha: string;
-  monto: string;
+  numero_factura: string;
+  numero_ncf: string | null;
+  cliente?: { nombre: string | null } | null;
+  fecha_emision: string;
+  total: number;
   estado: string;
-  ncf: string;
+  saldo_pendiente: number | null;
 };
 
 const estadosFactura = [
@@ -27,61 +30,115 @@ const estadosFactura = [
 ];
 
 export default function FacturasPage() {
-  const [facturas] = useState<Factura[]>([]);
+  const [facturas, setFacturas] = useState<Factura[]>([]);
   const [selectedEstado, setSelectedEstado] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyId, setCompanyId] = useState<string | null>(process.env.NEXT_PUBLIC_DEFAULT_COMPANY_ID ?? null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+  useEffect(() => {
+    currentSession()
+      .then((session) => {
+        if (session?.empresaId) setCompanyId(session.empresaId);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const fetchFacturas = useCallback(async () => {
+    if (!supabaseConfigured) {
+      setError("Configura Supabase para listar facturas.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const query = supabase
+      .from("facturas")
+      .select("id,numero_factura,numero_ncf,fecha_emision,total,estado,saldo_pendiente,cliente:clientes(nombre)")
+      .order("fecha_emision", { ascending: false })
+      .limit(200);
+
+    if (companyId) query.eq("empresa_id", companyId);
+
+    const { data, error: fetchError } = await query;
+
+    if (fetchError) {
+      setError(fetchError.message);
+      setLoading(false);
+      return;
+    }
+
+    setFacturas(
+      (data || []).map((row) => ({
+        id: row.id,
+        numero_factura: row.numero_factura,
+        numero_ncf: row.numero_ncf,
+        cliente: Array.isArray(row.cliente) ? row.cliente[0] : row.cliente,
+        fecha_emision: row.fecha_emision,
+        total: Number(row.total) || 0,
+        estado: row.estado || "",
+        saldo_pendiente: row.saldo_pendiente ?? 0,
+      }))
+    );
+    setLoading(false);
+  }, [companyId, supabaseConfigured]);
+
+  useEffect(() => {
+    fetchFacturas();
+  }, [fetchFacturas]);
+
+  const filteredFacturas = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return facturas.filter((factura) => {
+      const matchesEstado = selectedEstado ? factura.estado === selectedEstado : true;
+      const matchesTerm = term
+        ? [factura.numero_factura, factura.numero_ncf || "", factura.cliente?.nombre || ""]
+            .join(" ")
+            .toLowerCase()
+            .includes(term)
+        : true;
+      return matchesEstado && matchesTerm;
+    });
+  }, [facturas, searchTerm, selectedEstado]);
+
+  const resumen = useMemo(() => {
+    const totalMonto = facturas.reduce((sum, f) => sum + (Number(f.total) || 0), 0);
+    const porCobrar = facturas.reduce((sum, f) => sum + (Number(f.saldo_pendiente) || 0), 0);
+    const vencidas = facturas.filter((f) => f.estado === "VENCIDA").length;
+    return { totalMonto, porCobrar, vencidas };
+  }, [facturas]);
 
   const getEstadoBadge = (estado: string) => {
     const styles: Record<string, string> = {
-      BORRADOR: "bg-gray-500/20 text-gray-400",
-      ENVIADA: "bg-blue-500/20 text-blue-400",
-      PAGADA: "bg-green-500/20 text-green-400",
-      VENCIDA: "bg-red-500/20 text-red-400",
-      ANULADA: "bg-orange-500/20 text-orange-400",
+      BORRADOR: "bg-slate-100 text-slate-700",
+      ENVIADA: "bg-blue-100 text-blue-700",
+      PAGADA: "bg-emerald-100 text-emerald-700",
+      VENCIDA: "bg-red-100 text-red-700",
+      ANULADA: "bg-amber-100 text-amber-700",
     };
-    return styles[estado] || "bg-gray-500/20 text-gray-400";
+    return styles[estado] || "bg-slate-100 text-slate-700";
   };
 
   const columns = [
-    { header: "Número", accessor: "numero" as const },
-    { header: "NCF", accessor: "ncf" as const },
-    { header: "Cliente", accessor: "cliente" as const },
-    { header: "Fecha", accessor: "fecha" as const },
-    { header: "Monto", accessor: "monto" as const, className: "text-right font-semibold" },
+    { header: "Número", accessor: "numero_factura" as const },
+    { header: "NCF", accessor: "numero_ncf" as const },
+    { header: "Cliente", accessor: (row: Factura) => row.cliente?.nombre || "Cliente" },
+    { header: "Fecha", accessor: (row: Factura) => row.fecha_emision },
+    {
+      header: "Monto",
+      accessor: (row: Factura) => row.total.toLocaleString("es-DO", { style: "currency", currency: "DOP" }),
+      className: "text-right font-semibold",
+    },
     {
       header: "Estado",
       accessor: (row: Factura) => (
         <span className={`rounded-full px-2 py-1 text-xs font-medium ${getEstadoBadge(row.estado)}`}>
-          {row.estado}
+          {row.estado || "-"}
         </span>
-      ),
-    },
-    {
-      header: "Acciones",
-      accessor: () => (
-        <div className="flex gap-2">
-          <button className="rounded p-1 text-blue-400 hover:bg-slate-700" title="Ver">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-              />
-            </svg>
-          </button>
-          <button className="rounded p-1 text-green-400 hover:bg-slate-700" title="Descargar PDF">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-          </button>
-        </div>
       ),
     },
   ];
@@ -90,8 +147,8 @@ export default function FacturasPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Facturas</h1>
-          <p className="mt-1 text-sm text-slate-400">Gestiona tus facturas y comprobantes fiscales</p>
+          <h1 className="text-2xl font-bold text-slate-900">Facturas</h1>
+          <p className="mt-1 text-sm text-slate-600">Gestiona tus facturas y comprobantes fiscales</p>
         </div>
         <Link href="/documentos/facturas/nueva">
           <Button>
@@ -103,52 +160,50 @@ export default function FacturasPage() {
         </Link>
       </div>
 
-      {/* Stats rápidos */}
       <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <p className="text-sm text-slate-400">Total Facturas</p>
-          <p className="mt-1 text-2xl font-bold text-white">0</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-600">Total Facturas</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{facturas.length}</p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <p className="text-sm text-slate-400">Monto Total</p>
-          <p className="mt-1 text-2xl font-bold text-white">$0.00</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-600">Monto Total</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">
+            {resumen.totalMonto.toLocaleString("es-DO", { style: "currency", currency: "DOP" })}
+          </p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <p className="text-sm text-slate-400">Por Cobrar</p>
-          <p className="mt-1 text-2xl font-bold text-yellow-400">$0.00</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-600">Por Cobrar</p>
+          <p className="mt-1 text-2xl font-bold text-amber-700">
+            {resumen.porCobrar.toLocaleString("es-DO", { style: "currency", currency: "DOP" })}
+          </p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-          <p className="text-sm text-slate-400">Vencidas</p>
-          <p className="mt-1 text-2xl font-bold text-red-400">0</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-slate-600">Vencidas</p>
+          <p className="mt-1 text-2xl font-bold text-red-700">{resumen.vencidas}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
-        <div className="mb-4 flex gap-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
           <div className="flex-1">
             <Input
               placeholder="Buscar por número, cliente o NCF..."
               value={searchTerm}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="w-48">
-            <Select options={estadosFactura} value={selectedEstado} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedEstado(e.target.value)} />
+          <div className="w-full md:w-52">
+            <Select options={estadosFactura} value={selectedEstado} onChange={(e) => setSelectedEstado(e.target.value)} />
           </div>
-          <Button variant="secondary">
-            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            Exportar
+          <Button variant="secondary" onClick={fetchFacturas}>
+            Recargar
           </Button>
         </div>
 
-        <Table columns={columns} data={facturas} emptyMessage="No hay facturas registradas" />
+        {error && <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>}
+        {loading && <p className="mb-3 text-sm text-slate-600">Cargando facturas...</p>}
+
+        <Table columns={columns} data={filteredFacturas} emptyMessage="No hay facturas registradas" />
       </div>
     </div>
   );
