@@ -4,6 +4,10 @@
     "jsx": "preserve",
     "allowJs": false,
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
     "types": [
       "node",
       "react/experimental",

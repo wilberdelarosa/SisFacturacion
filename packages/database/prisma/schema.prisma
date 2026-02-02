@@ -11,411 +11,864 @@ datasource db {
 // ENUMS
 // -----------------------------------------------------
 
-enum Role {
-  ADMIN
-  SELLER
-  OPERATOR
-  ACCOUNTANT
+enum DocumentType {
+  COTIZACION
+  CONDUCE
+  PROFORMA
+  FACTURA
+  NOTA_CREDITO
+  NOTA_DEBITO
 }
 
 enum DocumentStatus {
-  DRAFT
-  SENT
-  APPROVED
-  IN_PROGRESS
-  COMPLETED
-  PAYMENT_PENDING
-  PAID
-  INVOICED
-  CANCELLED
-  VOIDED
+  BORRADOR
+  EN_REVISION
+  ENVIADA
+  APROBADA
+  RECHAZADA
+  ACEPTADA
+  EN_PROCESO
+  COMPLETADA
+  CONVERTIDA
+  PENDIENTE_PAGO
+  PAGADA
+  VENCIDA
+  FACTURADA
+  CANCELADA
+  ANULADA
 }
 
-enum PaymentMethod {
-  CASH
-  TRANSFER
-  CARD
-  CHECK
-  OTHER
+enum CustomerType {
+  INDIVIDUAL
+  EMPRESA
 }
 
 enum ProductType {
-  PRODUCT
-  SERVICE
-  RENTAL
-  TRANSPORT
+  PRODUCTO
+  SERVICIO
+  ALQUILER
+  TRANSPORTE
 }
 
-// NCF Dominicano
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+  GERENTE
+  VENDEDOR
+  OPERADOR
+  CONTABILIDAD
+  AUDITOR
+}
+
+enum PaymentStatus {
+  SIN_PAGAR
+  PAGO_PARCIAL
+  PAGADO
+  REEMBOLSADO
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  CHEQUE
+  DEPOSITO
+  OTRO
+}
+
 enum NcfType {
-  B01 // Credito Fiscal
-  B02 // Consumo
-  B03 // Notas de Debito
-  B04 // Notas de Credito
-  B11 // Regimenes Especiales
-  B12 // Gubernamental
-  B13 // Exportaciones
-  B14 // Para Facturas de Credito Fiscal
-  B15 // Comprobantes Gubernamentales
-  B16 // Comprobantes para Exportaciones
+  B01
+  B02
+  B03
+  B04
+  B11
+  B12
+  B13
+  B14
+  B15
+  B16
+  E31
+  E32
+  E33
+  E34
+  E41
+  E43
+  E44
+  E45
+  E46
+  E47
+}
+
+enum ApprovalStatus {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  CANCELADA
+}
+
+enum PaymentConditionType {
+  CONTADO
+  CREDITO
 }
 
 // -----------------------------------------------------
-// 1. IDENTITY & MASTER DATA
+// 1. IDENTITY & CONFIG
 // -----------------------------------------------------
 
 model Company {
-  id        String   @id @default(uuid())
-  name      String
-  rnc       String
-  address   String
-  phone     String
-  email     String
-  logo      String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  name           String   @map("nombre")
+  commercialName String?  @map("nombre_comercial")
+  rnc            String   @unique
+  address        String   @map("direccion")
+  phone          String   @map("telefono")
+  email          String   @map("correo")
+  website        String?  @map("sitio_web")
+  logo           String?
+  baseCurrency   String?  @default("DOP") @map("moneda_base")
+  config         Json?    @map("configuracion")
+  status         String?  @default("activo") @map("estado")
+  createdAt      DateTime @default(now()) @map("fecha_creacion")
+  updatedAt      DateTime @default(now()) @updatedAt @map("fecha_actualizacion")
 
-  users     User[]
-  customers Customer[]
-  products  Product[]
-  equipment Equipment[]
-  quotes    Quote[]
-  waybills  Waybill[]
-  proformas Proforma[]
-  invoices  Invoice[]
-  ncfSequences NcfSequence[]
+  branches        Branch[]
+  users           User[]
+  customers       Customer[]
+  products        Product[]
+  equipments      Equipment[]
+  taxes           Tax[]
+  docSequences    DocumentSequence[]
+  ncfSequences    NcfSequence[]
+  quotes          Quote[]
+  waybills        Waybill[]
+  proformas       Proforma[]
+  invoices        Invoice[]
+  payments        Payment[]
+  approvalRules   ApprovalRule[]
+  approvals       Approval[]
+  deliveredDocs   DocumentDelivery[]
+  activities      Activity[]
 
-  @@map("companies")
+  @@map("empresas")
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  companyId   String   @map("empresa_id")
+  code        String   @map("codigo")
+  name        String   @map("nombre")
+  address     String   @map("direccion")
+  phone       String?  @map("telefono")
+  email       String?  @map("correo")
+  isMain      Boolean? @default(false) @map("es_principal")
+  status      String?  @default("activo") @map("estado")
+  createdAt   DateTime @default(now()) @map("fecha_creacion")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users       User[]
+  docSequences DocumentSequence[]
+  quotes      Quote[]
+  waybills    Waybill[]
+  proformas   Proforma[]
+  invoices    Invoice[]
+
+  @@unique([companyId, code])
+  @@map("sucursales")
 }
 
 model User {
-  id           String   @id @default(uuid())
-  companyId    String
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(OPERATOR)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  auditLogs AuditLog[]
+  id               String    @id @default(uuid())
+  companyId        String    @map("empresa_id")
+  branchId         String?   @map("sucursal_id")
+  authUserId       String?   @map("auth_user_id") // Supabase Auth ID
+  name             String    @map("nombre")
+  email            String    @unique @map("correo")
+  passwordHash     String?   @map("password_hash")
+  role             UserRole? @default(OPERADOR) @map("rol")
+  phone            String?   @map("telefono")
+  avatar           String?
+  extraPermissions Json?     @map("permisos_adicionales")
+  config           Json?     @map("configuracion")
   
-  // Relations to created documents
-  createdQuotes    Quote[]
-  createdProformas Proforma[]
+  status           String?   @default("activo") @map("estado")
+  failedAttempts   Int?      @default(0) @map("intentos_fallidos")
+  blockedUntil     DateTime? @map("bloqueado_hasta")
+  mustChangePass   Boolean?  @default(false) @map("debe_cambiar_password")
+  lastAccess       DateTime? @map("ultimo_acceso")
+  lastIp           String?   @map("ultima_ip")
+  
+  createdAt        DateTime  @default(now()) @map("fecha_creacion")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("fecha_actualizacion")
 
-  @@map("users")
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch           Branch?   @relation(fields: [branchId], references: [id])
+  
+  sessions         Session[]
+  permissions      UserPermission[]
+  
+  // Relations to created/approved docs
+  createdQuotes       Quote[]          @relation("QuoteCreator")
+  approvedQuotes      Quote[]          @relation("QuoteApprover")
+  createdProformas    Proforma[]       @relation("ProformaCreator")
+  createdInvoices     Invoice[]        @relation("InvoiceCreator")
+  anulatedInvoices    Invoice[]        @relation("InvoiceAnulator")
+  registeredPayments  Payment[]        @relation("PaymentRegistrar")
+  approvalRequests    Approval[]       @relation("ApprovalRequester")
+  approvalResponses   Approval[]       @relation("ApprovalResponder")
+  ruleApprovers       ApprovalRule[]   @relation("RuleApprover")
+  sentDocuments       DocumentDelivery[] @relation("DocumentSender")
+  activities          Activity[]
+  auditLogs           AuditLog[]
+
+  @@map("usuarios")
 }
 
+model Session {
+  id        String    @id @default(uuid())
+  userId    String    @map("usuario_id")
+  token     String    @map("token")
+  refresh   String?   @map("refresh_token")
+  ip        String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+  isActive  Boolean?  @default(true) @map("activa")
+  expiresAt DateTime  @map("expira_en")
+  createdAt DateTime  @default(now()) @map("fecha_creacion")
+  closedAt  DateTime? @map("fecha_cierre")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sesiones")
+}
+
+// -----------------------------------------------------
+// 2. PERMISSIONS
+// -----------------------------------------------------
+
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique @map("clave") // module.action
+  module      String   @map("modulo")
+  action      String   @map("accion")
+  description String?  @map("descripcion")
+  isActive    Boolean? @default(true) @map("activo")
+  createdAt   DateTime @default(now()) @map("fecha_creacion")
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@map("permisos")
+}
+
+model RolePermission {
+  id            String   @id @default(uuid())
+  role          UserRole @map("rol")
+  permissionId  String   @map("permiso_id")
+  assignedAt    DateTime @default(now()) @map("fecha_asignacion")
+
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@map("roles_permisos")
+}
+
+model UserPermission {
+  id            String   @id @default(uuid())
+  userId        String   @map("usuario_id")
+  permissionId  String   @map("permiso_id")
+  type          String   @map("tipo") // allow, deny
+  assignedAt    DateTime @default(now()) @map("fecha_asignacion")
+
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@map("usuarios_permisos")
+}
+
+// -----------------------------------------------------
+// 3. MASTER DATA
+// -----------------------------------------------------
+
 model Customer {
-  id        String   @id @default(uuid())
-  companyId String
-  name      String
-  rnc       String?
-  type      String   // INDIVIDUAL, COMPANY
-  address   String?
-  phone     String?
-  email     String?
-  contact   String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id              String       @id @default(uuid())
+  companyId       String       @map("empresa_id")
+  code            String?      @map("codigo")
+  name            String       @map("nombre")
+  commercialName  String?      @map("nombre_comercial")
+  rnc             String?      @map("rnc_o_cedula")
+  type            CustomerType @map("tipo")
+  address         String?      @map("direccion")
+  phone           String?      @map("telefono")
+  email           String?      @map("correo")
+  contact         String?      @map("contacto")
+  contactRole     String?      @map("cargo_contacto")
+  
+  paymentType     PaymentConditionType? @default(CONTADO) @map("tipo_pago")
+  creditLimit     Decimal?     @db.Decimal(20, 2) @map("limite_credito")
+  creditDays      Int?         @default(0) @map("dias_credito")
+  generalDiscount Decimal?     @default(0) @db.Decimal(5, 2) @map("descuento_general")
+  
+  segment         String?      @map("segmento")
+  industry        String?      @map("industria")
+  tags            String[]     @map("etiquetas")
+  
+  status          String?      @default("activo") @map("estado")
+  notes           String?      @map("notas")
+  createdAt       DateTime     @default(now()) @map("fecha_creacion")
+  updatedAt       DateTime     @default(now()) @updatedAt @map("fecha_actualizacion")
 
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  quotes    Quote[]
-  waybills  Waybill[]
-  proformas Proforma[]
-  invoices  Invoice[]
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quotes          Quote[]
+  waybills        Waybill[]
+  proformas       Proforma[]
+  invoices        Invoice[]
 
-  @@map("customers")
+  @@unique([companyId, code])
+  @@map("clientes")
 }
 
 model Product {
   id          String      @id @default(uuid())
-  companyId   String
-  code        String?
-  name        String
-  description String?
-  type        ProductType
-  unit        String      // M3, PA, DIA, VI
-  price       Decimal     @db.Decimal(20, 2)
-  taxRate     Decimal     @default(18.00) @db.Decimal(5, 2)
-  isActive    Boolean     @default(true)
+  companyId   String      @map("empresa_id")
+  code        String?     @map("codigo")
+  name        String      @map("nombre")
+  description String?     @map("descripcion")
+  type        ProductType @map("tipo")
+  unit        String?     @map("unidad")
+  price       Decimal     @db.Decimal(20, 2) @map("precio_unitario")
+  cost        Decimal?    @db.Decimal(20, 2) @map("costo")
+  taxRate     Decimal?    @default(18.00) @db.Decimal(5, 2) @map("tasa_impuesto")
+  category    String?     @map("categoria")
+  brand       String?     @map("marca")
+  status      String?     @default("activo") @map("estado")
+  createdAt   DateTime    @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime    @default(now()) @updatedAt @map("fecha_actualizacion")
 
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  quoteItems QuoteItem[]
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quoteItems  QuoteItem[]
+  proformaItems ProformaItem[]
+  invoiceItems InvoiceItem[]
 
-  @@map("products_services")
+  @@unique([companyId, code])
+  @@map("productos_servicios")
 }
 
 model Equipment {
   id        String   @id @default(uuid())
-  companyId String
-  name      String   // "Mini Excavadora"
-  plate     String?  // "H-93"
-  code      String?
-  type      String   // "Excavadora", "Camion"
-  isActive  Boolean  @default(true)
+  companyId String   @map("empresa_id")
+  code      String?  @map("codigo")
+  name      String   @map("nombre")
+  plate     String?  @map("placa")
+  type      String?  @map("tipo")
+  brand     String?  @map("marca")
+  model     String?  @map("modelo")
+  year      Int?     @map("año")
+  status    String?  @default("activo") @map("estado")
+  createdAt DateTime @default(now()) @map("fecha_creacion")
 
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  waybills Waybill[]
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  waybills  Waybill[]
 
-  @@map("equipments")
+  @@unique([companyId, code])
+  @@map("equipos")
+}
+
+model Tax {
+  id          String   @id @default(uuid())
+  companyId   String   @map("empresa_id")
+  name        String   @map("nombre")
+  rate        Decimal  @db.Decimal(5, 2) @map("tasa")
+  type        String?  @map("tipo")
+  description String?  @map("descripcion")
+  isActive    Boolean? @default(true) @map("activo")
+  createdAt   DateTime @default(now()) @map("fecha_creacion")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("impuestos")
+}
+
+model DocumentSequence {
+  id            String       @id @default(uuid())
+  companyId     String       @map("empresa_id")
+  branchId      String?      @map("sucursal_id")
+  docType       DocumentType @map("tipo_documento")
+  prefix        String?      @map("prefijo")
+  nextNumber    Int?         @default(1) @map("siguiente_numero")
+  format        String?      @map("formato")
+  isActive      Boolean?     @default(true) @map("activo")
+  createdAt     DateTime     @default(now()) @map("fecha_creacion")
+
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch        Branch?      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@map("numeraciones_documentos")
+}
+
+model NcfSequence {
+  id            String   @id @default(uuid())
+  companyId     String   @map("empresa_id")
+  type          NcfType  @map("tipo")
+  serie         String   @map("serie")
+  currentSeq    Int?     @default(1) @map("secuencia_actual")
+  initialSeq    Int?     @default(1) @map("secuencia_inicial")
+  finalSeq      Int      @map("secuencia_final")
+  expiration    DateTime @db.Date @map("fecha_expiracion")
+  status        String?  @default("activo") @map("estado")
+  createdAt     DateTime @default(now()) @map("fecha_creacion")
+
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("secuencias_ncf")
 }
 
 // -----------------------------------------------------
-// 2. CORE BILLING FLOW
+// 4. BILLING DOCUMENTS
 // -----------------------------------------------------
 
-// 1️⃣ COTIZACIÓN (Presupuesto Global)
 model Quote {
   id             String         @id @default(uuid())
-  number         String         @unique // COT-2024-001
-  companyId      String
-  customerId     String
-  userId         String?
+  number         String         @map("numero_cotizacion")
+  companyId      String         @map("empresa_id")
+  branchId       String?        @map("sucursal_id")
+  customerId     String         @map("cliente_id")
+  userId         String?        @map("usuario_id")
   
-  location       String?
-  issueDate      DateTime
-  validUntil     DateTime?
-  status         DocumentStatus @default(DRAFT)
+  currency       String?        @default("DOP") @map("moneda")
+  exchangeRate   Decimal?       @default(1) @db.Decimal(20, 6) @map("tasa_cambio")
   
-  subtotal       Decimal        @default(0) @db.Decimal(20, 2)
-  taxAmount      Decimal        @default(0) @db.Decimal(20, 2)
-  total          Decimal        @default(0) @db.Decimal(20, 2)
+  title          String?        @map("titulo")
+  location       String?        @map("lugar")
+  issueDate      DateTime       @db.Date @map("fecha_emision")
+  validUntil     DateTime?      @db.Date @map("valido_hasta")
+  status         DocumentStatus? @default(BORRADOR) @map("estado")
   
-  notes          String?        @db.Text
-  terms          String?        @db.Text
-  isCashPayment  Boolean        @default(false)
+  subtotal       Decimal?       @default(0) @db.Decimal(20, 2) @map("subtotal")
+  totalDiscount  Decimal?       @default(0) @db.Decimal(20, 2) @map("descuento_total")
+  taxAmount      Decimal?       @default(0) @db.Decimal(20, 2) @map("monto_impuesto")
+  total          Decimal?       @default(0) @db.Decimal(20, 2) @map("total")
+  // totalBaseCurrency - Computed in app logic or DB generated column
   
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  // Pipeline
+  stage          String?        @map("etapa")
+  probability    Int?           @default(0) @map("probabilidad")
+  estCloseDate   DateTime?      @db.Date @map("fecha_cierre_estimada")
+  
+  // Approval
+  reqApproval    Boolean?       @default(false) @map("requiere_aprobacion")
+  approvedBy     String?        @map("aprobado_por")
+  approvalDate   DateTime?      @map("fecha_aprobacion")
+  approvalNotes  String?        @map("comentarios_aprobacion")
+  
+  // Conversion state
+  isConvertedToProforma Boolean? @default(false) @map("convertida_a_proforma")
+  proformaId     String?        @map("proforma_id")
+  isConvertedToInvoice  Boolean? @default(false) @map("convertida_a_factura")
+  invoiceId      String?        @map("factura_id")
 
-  company   Company     @relation(fields: [companyId], references: [id])
-  customer  Customer    @relation(fields: [customerId], references: [id])
-  creator   User?       @relation(fields: [userId], references: [id])
-  items     QuoteItem[]
+  notes          String?        @db.Text @map("notas")
+  terms          String?        @db.Text @map("terminos_condiciones")
+  isCashPayment  Boolean?       @default(false) @map("pago_al_contado")
+  signature      String?        @map("firma")
+  pdfUrl         String?        @map("url_pdf")
   
-  // Downstream
-  waybills  Waybill[]
-  proformas Proforma[]
-  invoices  Invoice[]
+  createdBy      String?        @map("creado_por")
+  createdAt      DateTime       @default(now()) @map("fecha_creacion")
+  updatedAt      DateTime       @default(now()) @updatedAt @map("fecha_actualizacion")
 
-  @@map("quotes")
+  company     Company     @relation(fields: [companyId], references: [id])
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  creator     User?       @relation("QuoteCreator", fields: [userId], references: [id])
+  approver    User?       @relation("QuoteApprover", fields: [approvedBy], references: [id])
+  
+  items       QuoteItem[]
+  waybills    Waybill[]
+  proformas   Proforma[]
+  invoices    Invoice[]
+
+  @@unique([companyId, number])
+  @@map("cotizaciones")
 }
 
 model QuoteItem {
   id          String   @id @default(uuid())
-  quoteId     String
-  productId   String?
-  description String
-  quantity    Decimal  @db.Decimal(10, 2)
-  unit        String?
-  price       Decimal  @db.Decimal(20, 2)
-  taxRate     Decimal  @default(0) @db.Decimal(5, 2)
-  subtotal    Decimal  @db.Decimal(20, 2)
-  order       Int      @default(0)
+  quoteId     String   @map("cotizacion_id")
+  productId   String?  @map("producto_servicio_id")
+  description String   @map("descripcion")
+  quantity    Decimal  @db.Decimal(10, 2) @map("cantidad")
+  unit        String?  @map("unidad")
+  price       Decimal  @db.Decimal(20, 2) @map("precio_unitario")
+  discount    Decimal? @default(0) @db.Decimal(20, 2) @map("descuento")
+  taxRate     Decimal? @default(0) @db.Decimal(5, 2) @map("tasa_impuesto")
+  taxAmount   Decimal? @default(0) @db.Decimal(20, 2) @map("monto_impuesto")
+  subtotal    Decimal  @db.Decimal(20, 2) @map("subtotal")
+  total       Decimal  @db.Decimal(20, 2) @map("total")
+  notes       String?  @map("notas")
+  order       Int?     @default(0) @map("orden")
 
-  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id])
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
 
-  @@map("quote_items")
+  @@map("cotizaciones_items")
 }
 
-// 2️⃣ CONDUCES (Registros de Trabajo Diario)
 model Waybill {
   id          String   @id @default(uuid())
-  number      String   // CON-001
-  companyId   String
-  quoteId     String?
-  customerId  String?
-  equipmentId String?
-  proformaId  String?
-
-  equipmentName String?
-  plate         String?
-  workShift     String? // "4/0 TA"
+  number      String   @map("numero_conduce")
+  companyId   String   @map("empresa_id")
+  branchId    String?  @map("sucursal_id")
+  quoteId     String?  @map("cotizacion_id")
+  customerId  String?  @map("cliente_id")
   
-  date          DateTime @db.Date
-  location      String?
+  equipmentId String?  @map("equipo_id")
+  equipName   String?  @map("equipo_nombre")
+  plate       String?  @map("placa")
+  driver      String?  @map("conductor")
   
-  // Materiales (Specific to Construction/Transport)
-  gravelSand    Decimal? @db.Decimal(10, 2)
-  gravel        Decimal? @db.Decimal(10, 2)
-  sand          Decimal? @db.Decimal(10, 2)
-  caliche       Decimal? @db.Decimal(10, 2)
-  debris        Decimal? @db.Decimal(10, 2)
-  others        String?
-
-  total         Decimal? @db.Decimal(20, 2)
-
-  // Signatures
-  deliveredBy   String?
-  receivedBy    String?
+  startTime   DateTime? @db.Time @map("hora_salida")
+  endTime     DateTime? @db.Time @map("hora_llegada")
+  shiftAM     String?  @map("hora_manana")
+  shiftPM     String?  @map("hora_tarde")
   
-  status        String   @default("ACTIVE")
-  isInProforma  Boolean  @default(false)
-  createdAt     DateTime @default(now())
-
-  company   Company    @relation(fields: [companyId], references: [id])
-  quote     Quote?     @relation(fields: [quoteId], references: [id])
-  customer  Customer?  @relation(fields: [customerId], references: [id])
-  equipment Equipment? @relation(fields: [equipmentId], references: [id])
-  proforma  Proforma?  @relation(fields: [proformaId], references: [id])
+  date        DateTime @db.Date @map("fecha")
+  origin      String?  @map("lugar_origen")
+  destination String?  @map("lugar_destino")
   
-  // Link to Proforma Item for traceability
+  // Materials
+  gravelSand  Decimal? @db.Decimal(10, 2) @map("grava_arena")
+  gravel      Decimal? @db.Decimal(10, 2) @map("grava")
+  sand        Decimal? @db.Decimal(10, 2) @map("arena")
+  caliche     Decimal? @db.Decimal(10, 2) @map("caliche")
+  debris      Decimal? @db.Decimal(10, 2) @map("bote_escombros")
+  others      String?  @map("otros")
+  
+  subtotal    Decimal? @db.Decimal(20, 2) @map("subtotal")
+  taxAmount   Decimal? @db.Decimal(20, 2) @map("monto_impuesto")
+  total       Decimal? @db.Decimal(20, 2) @map("total")
+  
+  deliveredBy String?  @map("entregado_por")
+  receivedBy  String?  @map("recibido_por")
+  signDeliver String?  @map("firma_entrega")
+  signReceive String?  @map("firma_recibido")
+  
+  status      String?  @default("activo") @map("estado")
+  inProforma  Boolean? @default(false) @map("incluido_en_proforma")
+  proformaId  String?  @map("proforma_id")
+  pdfUrl      String?  @map("url_pdf")
+  
+  createdBy   String?  @map("creado_por")
+  createdAt   DateTime @default(now()) @map("fecha_creacion")
+
+  company     Company   @relation(fields: [companyId], references: [id])
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  quote       Quote?    @relation(fields: [quoteId], references: [id])
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  proforma    Proforma? @relation(fields: [proformaId], references: [id])
+  
   proformaItems ProformaItem[]
 
-  @@map("waybills")
+  @@unique([companyId, number])
+  @@map("conduces")
 }
 
-// 3️⃣ PROFORMA (Reporte de Seguimiento)
 model Proforma {
-  id          String         @id @default(uuid())
-  number      String         @unique
-  companyId   String
-  quoteId     String
-  customerId  String
-  userId      String?
-
-  startDate   DateTime       @db.Date
-  endDate     DateTime       @db.Date
-  issueDate   DateTime       @default(now())
+  id             String         @id @default(uuid())
+  number         String         @map("numero_proforma")
+  companyId      String         @map("empresa_id")
+  branchId       String?        @map("sucursal_id")
+  quoteId        String?        @map("cotizacion_id")
+  customerId     String         @map("cliente_id")
   
-  status      DocumentStatus @default(IN_PROGRESS)
-
-  totalNet    Decimal        @default(0) @db.Decimal(20, 2)
-  totalTax    Decimal        @default(0) @db.Decimal(20, 2)
-  totalGross  Decimal        @default(0) @db.Decimal(20, 2) // Net + Tax base
-  itbis       Decimal        @default(0) @db.Decimal(20, 2)
-  total       Decimal        @default(0) @db.Decimal(20, 2) // Final total
-
-  // Comparison vs Quote
-  quoteTotal       Decimal? @db.Decimal(20, 2)
-  variationAmount  Decimal? @db.Decimal(20, 2)
+  currency       String?        @default("DOP") @map("moneda")
+  exchangeRate   Decimal?       @default(1) @db.Decimal(20, 6) @map("tasa_cambio")
   
-  observations     String?  @db.Text
-  waybillCount     Int      @default(0)
+  issueDate      DateTime       @db.Date @map("fecha_emision")
+  startDate      DateTime?      @db.Date @map("fecha_inicio")
+  endDate        DateTime?      @db.Date @map("fecha_fin")
+  validUntil     DateTime?      @db.Date @map("valido_hasta")
+  status         DocumentStatus? @default(EN_PROCESO) @map("estado")
   
-  createdAt   DateTime     @default(now())
-
-  company   Company        @relation(fields: [companyId], references: [id])
-  quote     Quote          @relation(fields: [quoteId], references: [id])
-  customer  Customer       @relation(fields: [customerId], references: [id])
-  creator   User?          @relation(fields: [userId], references: [id])
+  subtotal       Decimal?       @default(0) @db.Decimal(20, 2) @map("subtotal")
+  totalDiscount  Decimal?       @default(0) @db.Decimal(20, 2) @map("descuento_total")
+  totalExc       Decimal?       @default(0) @db.Decimal(20, 2) @map("total_exc")
+  totalGrav      Decimal?       @default(0) @db.Decimal(20, 2) @map("total_grav")
+  totalGeneral   Decimal?       @default(0) @db.Decimal(20, 2) @map("total_general")
+  taxAmount      Decimal?       @default(0) @db.Decimal(20, 2) @map("monto_impuesto")
+  itbis18        Decimal?       @default(0) @db.Decimal(20, 2) @map("itbis_18")
+  total          Decimal?       @default(0) @db.Decimal(20, 2) @map("total")
+  totalRd        Decimal?       @default(0) @db.Decimal(20, 2) @map("total_rd")
   
-  waybills  Waybill[]
-  items     ProformaItem[]
-  invoice   Invoice?
+  quoteTotal     Decimal?       @db.Decimal(20, 2) @map("cotizacion_total")
+  variationAmt   Decimal?       @db.Decimal(20, 2) @map("variacion_monto")
+  variationPct   Decimal?       @db.Decimal(5, 2) @map("variacion_porcentaje")
+  
+  isConvertedToInvoice Boolean? @default(false) @map("convertida_a_factura")
+  invoiceId      String?        @map("factura_id") // Relation handled on Invoice side or here?
+  
+  observations   String?        @db.Text @map("observaciones")
+  waybillCount   Int?           @default(0) @map("cantidad_conduces")
+  notes          String?        @db.Text @map("notas")
+  terms          String?        @db.Text @map("terminos_condiciones")
+  pdfUrl         String?        @map("url_pdf")
+  
+  createdBy      String?        @map("creado_por")
+  createdAt      DateTime       @default(now()) @map("fecha_creacion")
+  updatedAt      DateTime       @default(now()) @updatedAt @map("fecha_actualizacion")
 
+  company       Company        @relation(fields: [companyId], references: [id])
+  branch        Branch?        @relation(fields: [branchId], references: [id])
+  quote         Quote?         @relation(fields: [quoteId], references: [id])
+  customer      Customer       @relation(fields: [customerId], references: [id])
+  creator       User?          @relation("ProformaCreator", fields: [createdBy], references: [id])
+  
+  waybills      Waybill[]
+  items         ProformaItem[]
+  invoices      Invoice[]
+
+  @@unique([companyId, number])
   @@map("proformas")
 }
 
 model ProformaItem {
   id          String   @id @default(uuid())
-  proformaId  String
-  waybillId   String?  // Linked Conduce
+  proformaId  String   @map("proforma_id")
+  waybillId   String?  @map("conduce_id")
+  productId   String?  @map("producto_servicio_id")
   
-  date        DateTime @db.Date
-  equipment   String?
-  description String
-  quantity    Decimal  @db.Decimal(10, 2)
-  unit        String?
-  price       Decimal  @db.Decimal(20, 2)
-  total       Decimal  @db.Decimal(20, 2)
-  order       Int      @default(0)
+  wbNumber    String?  @map("numero_conduce")
+  date        DateTime? @db.Date @map("fecha")
+  equipment   String?  @map("equipo")
+  
+  description String   @map("descripcion")
+  quantity    Decimal  @db.Decimal(10, 2) @map("cantidad")
+  unit        String?  @map("unidad")
+  price       Decimal  @db.Decimal(20, 2) @map("precio_unitario")
+  discount    Decimal? @default(0) @db.Decimal(20, 2) @map("descuento")
+  taxRate     Decimal? @default(0) @db.Decimal(5, 2) @map("tasa_impuesto")
+  taxAmount   Decimal? @default(0) @db.Decimal(20, 2) @map("monto_impuesto")
+  subtotal    Decimal  @db.Decimal(20, 2) @map("subtotal")
+  total       Decimal  @db.Decimal(20, 2) @map("total")
+  order       Int?     @default(0) @map("orden")
 
-  proforma Proforma @relation(fields: [proformaId], references: [id], onDelete: Cascade)
-  waybill  Waybill? @relation(fields: [waybillId], references: [id])
+  proforma    Proforma @relation(fields: [proformaId], references: [id], onDelete: Cascade)
+  waybill     Waybill? @relation(fields: [waybillId], references: [id])
+  product     Product? @relation(fields: [productId], references: [id])
 
-  @@map("proforma_items")
+  @@map("proformas_items")
 }
 
-// 4️⃣ FACTURA (Documento Fiscal)
 model Invoice {
   id             String         @id @default(uuid())
-  number         String         @unique
-  companyId      String
-  proformaId     String?        @unique // One Invoice per Proforma usually
-  quoteId        String?
-  customerId     String
+  number         String         @map("numero_factura")
+  companyId      String         @map("empresa_id")
+  branchId       String?        @map("sucursal_id")
+  proformaId     String?        @map("proforma_id")
+  quoteId        String?        @map("cotizacion_id")
+  customerId     String         @map("cliente_id")
   
-  ncf            String?        @unique
-  ncfType        NcfType?
-  validUntil     DateTime?      @db.Date
+  currency       String?        @default("DOP") @map("moneda")
+  exchangeRate   Decimal?       @default(1) @db.Decimal(20, 6) @map("tasa_cambio")
   
-  issueDate      DateTime       @db.Date
+  ncf            String?        @unique @map("numero_ncf")
+  ncfType        NcfType?       @map("tipo_ncf")
+  validUntil     DateTime?      @db.Date @map("vigente_hasta")
   
-  // Summarized Amounts
-  exemptAmount   Decimal        @default(0) @db.Decimal(20, 2)
-  taxableAmount  Decimal        @default(0) @db.Decimal(20, 2)
-  subtotal       Decimal        @default(0) @db.Decimal(20, 2)
-  tax            Decimal        @default(0) @db.Decimal(20, 2)
-  total          Decimal        @default(0) @db.Decimal(20, 2)
+  issueDate      DateTime       @db.Date @map("fecha_emision")
+  dueDate        DateTime?      @db.Date @map("fecha_vencimiento")
   
-  status         DocumentStatus @default(INVOICED)
-  paymentStatus  String         @default("PAID")
-  paymentMethod  PaymentMethod?
+  subtotal       Decimal?       @default(0) @db.Decimal(20, 2) @map("subtotal")
+  totalDiscount  Decimal?       @default(0) @db.Decimal(20, 2) @map("descuento_total")
+  exemptAmount   Decimal?       @default(0) @db.Decimal(20, 2) @map("valor_excento")
+  taxableAmount  Decimal?       @default(0) @db.Decimal(20, 2) @map("valor_gravado")
+  taxAmount      Decimal?       @default(0) @db.Decimal(20, 2) @map("monto_impuesto")
+  itbis18        Decimal?       @default(0) @db.Decimal(20, 2) @map("itbis_18")
+  total          Decimal?       @default(0) @db.Decimal(20, 2) @map("total")
+  totalRd        Decimal?       @default(0) @db.Decimal(20, 2) @map("total_rd")
   
-  createdAt      DateTime       @default(now())
+  paymentStatus  PaymentStatus? @default(SIN_PAGAR) @map("estado_pago")
+  paidAmount     Decimal?       @default(0) @db.Decimal(20, 2) @map("monto_pagado")
+  balance        Decimal?       @default(0) @db.Decimal(20, 2) @map("saldo_pendiente")
+  
+  status         DocumentStatus? @default(PENDIENTE_PAGO) @map("estado")
+  sentToDgii     Boolean?       @default(false) @map("enviado_dgii")
+  dgiiSentDate   DateTime?      @map("fecha_envio_dgii")
+  
+  notes          String?        @db.Text @map("notas")
+  terms          String?        @db.Text @map("terminos_condiciones")
+  pdfUrl         String?        @map("url_pdf")
+  
+  createdBy      String?        @map("creado_por")
+  createdAt      DateTime       @default(now()) @map("fecha_creacion")
+  updatedAt      DateTime       @default(now()) @updatedAt @map("fecha_actualizacion")
+  
+  anulatedBy     String?        @map("anulado_por")
+  anulationDate  DateTime?      @map("fecha_anulacion")
+  anulationReason String?       @map("razon_anulacion")
 
-  company   Company       @relation(fields: [companyId], references: [id])
-  proforma  Proforma?     @relation(fields: [proformaId], references: [id])
-  quote     Quote?        @relation(fields: [quoteId], references: [id])
-  customer  Customer      @relation(fields: [customerId], references: [id])
+  company     Company     @relation(fields: [companyId], references: [id])
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+  proforma    Proforma?   @relation(fields: [proformaId], references: [id])
+  quote       Quote?      @relation(fields: [quoteId], references: [id])
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  creator     User?       @relation("InvoiceCreator", fields: [createdBy], references: [id])
+  anulator    User?       @relation("InvoiceAnulator", fields: [anulatedBy], references: [id])
   
-  items     InvoiceItem[]
+  items       InvoiceItem[]
+  payments    Payment[]
 
-  @@map("invoices")
+  @@unique([companyId, number])
+  @@map("facturas")
 }
 
 model InvoiceItem {
   id          String   @id @default(uuid())
-  invoiceId   String
-  description String
-  quantity    Decimal  @db.Decimal(10, 2)
-  unit        String?
-  price       Decimal  @db.Decimal(20, 2)
-  tax         Decimal  @default(0) @db.Decimal(20, 2)
-  total       Decimal  @db.Decimal(20, 2)
-  order       Int      @default(0)
+  invoiceId   String   @map("factura_id")
+  productId   String?  @map("producto_servicio_id")
+  description String   @map("descripcion")
+  quantity    Decimal  @db.Decimal(10, 2) @map("cantidad")
+  unit        String?  @map("unidad")
+  price       Decimal  @db.Decimal(20, 2) @map("precio_unitario")
+  discount    Decimal? @default(0) @db.Decimal(20, 2) @map("descuento")
+  taxRate     Decimal? @default(0) @db.Decimal(5, 2) @map("tasa_impuesto")
+  taxAmount   Decimal? @default(0) @db.Decimal(20, 2) @map("monto_impuesto")
+  itbis       Decimal? @default(0) @db.Decimal(20, 2) @map("itbis")
+  subtotal    Decimal  @db.Decimal(20, 2) @map("subtotal")
+  total       Decimal  @db.Decimal(20, 2) @map("total")
+  order       Int?     @default(0) @map("orden")
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
 
-  @@map("invoice_items")
+  @@map("facturas_items")
 }
 
-model NcfSequence {
-  id              String   @id @default(uuid())
-  companyId       String
-  type            NcfType
-  serie           String   // "B"
-  currentSequence Int      @default(1)
-  finalSequence   Int
-  expirationDate  DateTime @db.Date
-  isActive        Boolean  @default(true)
+model Payment {
+  id            String        @id @default(uuid())
+  invoiceId     String        @map("factura_id")
+  companyId     String        @map("empresa_id")
+  number        String?       @map("numero_pago")
+  date          DateTime      @db.Date @map("fecha_pago")
+  amount        Decimal       @db.Decimal(20, 2) @map("monto")
+  currency      String?       @default("DOP") @map("moneda")
+  exchangeRate  Decimal?      @default(1) @db.Decimal(20, 6) @map("tasa_cambio")
+  method        PaymentMethod @map("metodo")
+  reference     String?       @map("referencia")
+  bank          String?       @map("banco")
+  account       String?       @map("cuenta")
+  proofUrl      String?       @map("comprobante_url")
+  notes         String?       @map("notas")
+  status        String?       @default("aplicado") @map("estado")
+  registeredBy  String?       @map("registrado_por")
+  createdAt     DateTime      @default(now()) @map("fecha_creacion")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  registrar     User?         @relation("PaymentRegistrar", fields: [registeredBy], references: [id])
 
-  @@map("ncf_sequences")
+  @@map("pagos")
 }
 
 // -----------------------------------------------------
-// 3. AUDIT
+// 5. WORKFLOW & AUDIT
 // -----------------------------------------------------
+
+model ApprovalRule {
+  id             String         @id @default(uuid())
+  companyId      String         @map("empresa_id")
+  name           String         @map("nombre")
+  docType        DocumentType   @map("tipo_documento")
+  condition      String         @map("condicion")
+  minValue       Decimal?       @db.Decimal(20, 2) @map("valor_minimo")
+  maxDiscount    Decimal?       @db.Decimal(5, 2) @map("descuento_maximo")
+  approverRole   UserRole?      @map("rol_aprobador")
+  approverUserId String?        @map("usuario_aprobador_id")
+  isActive       Boolean?       @default(true) @map("activa")
+  createdAt      DateTime       @default(now()) @map("fecha_creacion")
+
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  approverUser   User?          @relation("RuleApprover", fields: [approverUserId], references: [id])
+  approvals      Approval[]
+
+  @@map("reglas_aprobacion")
+}
+
+model Approval {
+  id             String         @id @default(uuid())
+  companyId      String         @map("empresa_id")
+  docType        DocumentType   @map("documento_tipo")
+  docId          String         @map("documento_id")
+  ruleId         String?        @map("regla_id")
+  requesterId    String?        @map("usuario_solicita")
+  approverId     String?        @map("usuario_aprueba")
+  status         ApprovalStatus? @default(PENDIENTE) @map("estado")
+  comment        String?        @map("comentario")
+  requestDate    DateTime       @default(now()) @map("fecha_solicitud")
+  responseDate   DateTime?      @map("fecha_respuesta")
+
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rule           ApprovalRule?  @relation(fields: [ruleId], references: [id])
+  requester      User?          @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  responder      User?          @relation("ApprovalResponder", fields: [approverId], references: [id])
+
+  @@map("aprobaciones")
+}
 
 model AuditLog {
-  id            String   @id @default(uuid())
-  action        String
-  entity        String
-  entityId      String
-  previousValue String?  @db.Text
-  newValue      String?  @db.Text
-  performedBy   String
-  timestamp     DateTime @default(now())
-  
-  user          User     @relation(fields: [performedBy], references: [id])
+  id          String   @id @default(uuid())
+  companyId   String?  @map("empresa_id")
+  userId      String?  @map("usuario_id")
+  action      String   @map("accion")
+  module      String   @map("modulo")
+  entityType  String?  @map("entidad_tipo")
+  entityId    String?  @map("entidad_id")
+  oldData     Json?    @map("datos_anteriores")
+  newData     Json?    @map("datos_nuevos")
+  ip          String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  timestamp   DateTime @default(now()) @map("fecha")
 
-  @@map("audit_logs")
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_log")
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  companyId   String   @map("empresa_id")
+  type        String   @map("tipo")
+  description String   @map("descripcion")
+  entityType  String?  @map("entidad_tipo")
+  entityId    String?  @map("entidad_id")
+  userId      String?  @map("usuario_id")
+  date        DateTime @default(now()) @map("fecha")
+  metadata    Json?    @map("metadata")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@map("actividades")
+}
+
+model DocumentDelivery {
+  id         String       @id @default(uuid())
+  companyId  String       @map("empresa_id")
+  docType    DocumentType @map("documento_tipo")
+  docId      String       @map("documento_id")
+  recipient  String       @map("destinatario")
+  method     String       @map("metodo")
+  subject    String?      @map("asunto")
+  message    String?      @map("mensaje")
+  attachments String[]    @map("adjuntos")
+  status     String?      @default("pendiente") @map("estado")
+  error      String?      @map("error")
+  sentAt     DateTime     @default(now()) @map("fecha_envio")
+  deliveredAt DateTime?   @map("fecha_entrega")
+  sentBy     String?      @map("enviado_por")
+
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sender     User?        @relation("DocumentSender", fields: [sentBy], references: [id])
+
+  @@map("envios_documentos")
 }
