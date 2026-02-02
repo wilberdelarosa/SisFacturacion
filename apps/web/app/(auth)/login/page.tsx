@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isLocked, login } from "../../../lib/auth";
@@ -9,8 +10,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
 
-  const [username, setUsername] = useState("Admin");
-  const [password, setPassword] = useState("!Admin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -55,9 +56,7 @@ function LoginForm() {
 
         <div className="rounded-lg border border-slate-700 bg-slate-800 p-8 shadow-xl">
           <h2 className="mb-2 text-2xl font-semibold text-white">Ingresar al sistema</h2>
-          <p className="mb-6 text-sm text-slate-400">
-            Usa las credenciales provisionales Admin / !Admin
-          </p>
+          <p className="mb-6 text-sm text-slate-400">Ingresa con tu usuario de Supabase Auth.</p>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
@@ -67,7 +66,7 @@ function LoginForm() {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="Admin"
+                placeholder="tu-correo@empresa.com"
               />
             </div>
             <div>
@@ -79,7 +78,7 @@ function LoginForm() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="!Admin"
+                  placeholder="••••••••"
                 />
                 <button
                   type="button"
@@ -102,6 +101,9 @@ function LoginForm() {
             >
               {locked ? "Bloqueado" : loading ? "Validando..." : "Ingresar"}
             </button>
+            <div className="text-center text-xs text-slate-500">
+              ¿No tienes cuenta? <Link href="/register" className="text-blue-400 hover:text-blue-300">Regístrate</Link>
+            </div>
           </form>
         </div>
 

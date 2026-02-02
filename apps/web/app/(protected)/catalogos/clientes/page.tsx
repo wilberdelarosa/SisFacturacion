@@ -1,11 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent, ChangeEvent } from "react";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Select } from "../../../../components/ui/Select";
 import { Table } from "../../../../components/ui/Table";
 import { Modal } from "../../../../components/ui/Modal";
+import { supabase } from "../../../../lib/supabaseClient";
+import { currentSession } from "../../../../lib/auth";
+
+type ClienteRow = {
+  id: string;
+  codigo: string | null;
+  nombre: string;
+  rnc_o_cedula: string | null;
+  tipo: string;
+  telefono: string | null;
+  correo: string | null;
+  estado: string | null;
+};
 
 type Cliente = {
   id: string;
@@ -18,16 +32,172 @@ type Cliente = {
   estado: string;
 };
 
+type ClienteForm = {
+  tipo: string;
+  nombre: string;
+  rnc: string;
+  nombreComercial: string;
+  telefono: string;
+  email: string;
+  contacto: string;
+  cargoContacto: string;
+  direccion: string;
+  tipoPago: "CONTADO" | "CREDITO";
+  limiteCredito: string;
+  diasCredito: string;
+};
+
 const tiposCliente = [
-  { value: "", label: "Seleccionar..." },
   { value: "INDIVIDUAL", label: "Individual" },
   { value: "EMPRESA", label: "Empresa" },
 ];
 
+const initialForm: ClienteForm = {
+  tipo: "INDIVIDUAL",
+  nombre: "",
+  rnc: "",
+  nombreComercial: "",
+  telefono: "",
+  email: "",
+  contacto: "",
+  cargoContacto: "",
+  direccion: "",
+  tipoPago: "CONTADO",
+  limiteCredito: "",
+  diasCredito: "0",
+};
+
+const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const defaultCompanyId = process.env.NEXT_PUBLIC_DEFAULT_COMPANY_ID ?? null;
+
 export default function ClientesPage() {
-  const [clientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [form, setForm] = useState<ClienteForm>(initialForm);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(defaultCompanyId);
+
+  useEffect(() => {
+    currentSession()
+      .then((session) => {
+        if (session?.empresaId) setCompanyId(session.empresaId);
+      })
+      .catch(() => {
+        // keep default company id
+      });
+  }, []);
+
+  const mapRow = (row: ClienteRow): Cliente => ({
+    id: row.id,
+    codigo: row.codigo || "—",
+    nombre: row.nombre,
+    rnc: row.rnc_o_cedula || "—",
+    tipo: row.tipo,
+    telefono: row.telefono || "—",
+    email: row.correo || "—",
+    estado: row.estado || "activo",
+  });
+
+  const fetchClientes = useCallback(async () => {
+    if (!supabaseConfigured) {
+      setError("Configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY para cargar los clientes.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const query = supabase
+      .from("clientes")
+      .select("id,codigo,nombre,rnc_o_cedula,tipo,telefono,correo,estado")
+      .order("nombre", { ascending: true });
+
+    if (companyId) {
+      query.eq("empresa_id", companyId);
+    }
+
+    const { data, error: fetchError } = await query;
+
+    if (fetchError) {
+      setError(fetchError.message);
+      setLoading(false);
+      return;
+    }
+
+    setClientes((data || []).map(mapRow));
+    setLoading(false);
+  }, [companyId]);
+
+  useEffect(() => {
+    fetchClientes();
+  }, [fetchClientes]);
+
+  const handleFormChange = (field: keyof ClienteForm) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!supabaseConfigured) {
+      setError("Configura Supabase antes de crear clientes.");
+      return;
+    }
+
+    if (!companyId) {
+      setError("Define la empresa activa (NEXT_PUBLIC_DEFAULT_COMPANY_ID o session.empresaId).");
+      return;
+    }
+
+    const { nombre, rnc, nombreComercial, telefono, email, contacto, cargoContacto, direccion, tipoPago, limiteCredito, diasCredito, tipo } = form;
+
+    const payload = {
+      empresa_id: companyId,
+      nombre,
+      rnc_o_cedula: rnc || null,
+      nombre_comercial: nombreComercial || null,
+      tipo,
+      telefono: telefono || null,
+      correo: email || null,
+      contacto: contacto || null,
+      cargo_contacto: cargoContacto || null,
+      direccion: direccion || null,
+      tipo_pago: tipoPago,
+      limite_credito: limiteCredito ? Number(limiteCredito) : null,
+      dias_credito: diasCredito ? Number(diasCredito) : null,
+      estado: "activo",
+    };
+
+    const { data, error: insertError } = await supabase
+      .from("clientes")
+      .insert(payload)
+      .select("id,codigo,nombre,rnc_o_cedula,tipo,telefono,correo,estado")
+      .single();
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    if (data) {
+      setClientes((prev) => [mapRow(data), ...prev]);
+    }
+
+    setForm(initialForm);
+    setIsModalOpen(false);
+  };
+
+  const filteredClientes = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return clientes;
+    return clientes.filter((cliente) =>
+      [cliente.nombre, cliente.codigo, cliente.rnc, cliente.telefono, cliente.email]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(term)),
+    );
+  }, [clientes, searchTerm]);
 
   const columns = [
     { header: "Código", accessor: "codigo" as const },
@@ -66,15 +236,15 @@ export default function ClientesPage() {
       </div>
 
       <div className="rounded-lg border border-slate-700 bg-slate-800 p-6">
-        <div className="mb-4 flex gap-4">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
           <div className="flex-1">
             <Input
               placeholder="Buscar por nombre, RNC o código..."
               value={searchTerm}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button variant="secondary">
+          <Button variant="secondary" onClick={fetchClientes}>
             <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
@@ -83,37 +253,56 @@ export default function ClientesPage() {
                 d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
               />
             </svg>
-            Filtros
+            Refrescar
           </Button>
         </div>
 
-        <Table columns={columns} data={clientes} emptyMessage="No hay clientes registrados" />
+        {error && <p className="mb-3 text-sm text-amber-400">{error}</p>}
+        {loading && <p className="mb-3 text-sm text-slate-400">Cargando clientes...</p>}
+
+        <Table columns={columns} data={filteredClientes} emptyMessage="No hay clientes registrados" />
       </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nuevo Cliente" size="lg">
-        <form className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Código" placeholder="AUTO" disabled />
-            <Select label="Tipo" options={tiposCliente} required />
+            <Select label="Tipo" options={tiposCliente} value={form.tipo} onChange={handleFormChange("tipo")} required />
           </div>
 
-          <Input label="Nombre o Razón Social" placeholder="Ej: Juan Pérez o Empresa XYZ" required />
+          <Input
+            label="Nombre o Razón Social"
+            placeholder="Ej: Juan Pérez o Empresa XYZ"
+            value={form.nombre}
+            onChange={handleFormChange("nombre")}
+            required
+          />
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Input label="RNC/Cédula" placeholder="000-0000000-0" required />
-            <Input label="Nombre Comercial" placeholder="Opcional" />
+            <Input label="RNC/Cédula" placeholder="000-0000000-0" value={form.rnc} onChange={handleFormChange("rnc")} required />
+            <Input
+              label="Nombre Comercial"
+              placeholder="Opcional"
+              value={form.nombreComercial}
+              onChange={handleFormChange("nombreComercial")}
+            />
           </div>
 
-          <Input label="Dirección" placeholder="Calle, sector, ciudad" />
+          <Input label="Dirección" placeholder="Calle, sector, ciudad" value={form.direccion} onChange={handleFormChange("direccion")} />
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Input label="Teléfono" type="tel" placeholder="(809) 000-0000" required />
-            <Input label="Email" type="email" placeholder="cliente@ejemplo.com" required />
+            <Input label="Teléfono" type="tel" placeholder="(809) 000-0000" value={form.telefono} onChange={handleFormChange("telefono")} required />
+            <Input label="Email" type="email" placeholder="cliente@ejemplo.com" value={form.email} onChange={handleFormChange("email")} required />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Input label="Contacto" placeholder="Nombre del contacto" />
-            <Input label="Cargo del Contacto" placeholder="Ej: Gerente de Compras" />
+            <Input label="Contacto" placeholder="Nombre del contacto" value={form.contacto} onChange={handleFormChange("contacto")} />
+            <Input
+              label="Cargo del Contacto"
+              placeholder="Ej: Gerente de Compras"
+              value={form.cargoContacto}
+              onChange={handleFormChange("cargoContacto")}
+            />
           </div>
 
           <div className="border-t border-slate-700 pt-4">
@@ -125,9 +314,23 @@ export default function ClientesPage() {
                   { value: "CONTADO", label: "Contado" },
                   { value: "CREDITO", label: "Crédito" },
                 ]}
+                value={form.tipoPago}
+                onChange={handleFormChange("tipoPago")}
               />
-              <Input label="Límite de Crédito" type="number" placeholder="0.00" />
-              <Input label="Días de Crédito" type="number" placeholder="0" />
+              <Input
+                label="Límite de Crédito"
+                type="number"
+                placeholder="0.00"
+                value={form.limiteCredito}
+                onChange={handleFormChange("limiteCredito")}
+              />
+              <Input
+                label="Días de Crédito"
+                type="number"
+                placeholder="0"
+                value={form.diasCredito}
+                onChange={handleFormChange("diasCredito")}
+              />
             </div>
           </div>
 

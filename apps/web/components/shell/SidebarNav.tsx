@@ -3,19 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
+  Package,
+  FileDigit,
+  BarChart3,
+  Settings,
+  ChevronDown
+} from "lucide-react";
 
 type MenuItem = {
   label: string;
   href?: string;
-  icon: string;
+  icon: React.ElementType;
   submenu?: { label: string; href: string }[];
 };
 
 const menuItems: MenuItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: "📊" },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   {
     label: "Facturas",
-    icon: "📄",
+    icon: FileText,
     submenu: [
       { label: "Todas las Facturas", href: "/documentos/facturas" },
       { label: "Nueva Factura", href: "/documentos/facturas/nueva" },
@@ -24,13 +34,13 @@ const menuItems: MenuItem[] = [
       { label: "Conduces", href: "/documentos/conduces" },
     ],
   },
-  { label: "Clientes", href: "/catalogos/clientes", icon: "👥" },
-  { label: "Productos", href: "/catalogos/productos", icon: "📦" },
-  { label: "NCF", href: "/ncf", icon: "🔢" },
-  { label: "Reportes", href: "/reportes", icon: "📈" },
+  { label: "Clientes", href: "/catalogos/clientes", icon: Users },
+  { label: "Productos", href: "/catalogos/productos", icon: Package },
+  { label: "NCF", href: "/ncf", icon: FileDigit },
+  { label: "Reportes", href: "/reportes", icon: BarChart3 },
   {
     label: "Configuración",
-    icon: "⚙️",
+    icon: Settings,
     submenu: [
       { label: "Empresas", href: "/catalogos/empresas" },
       { label: "Sucursales", href: "/catalogos/sucursales" },
@@ -66,30 +76,25 @@ export function SidebarNav() {
           const isExpanded = expandedMenus.has(item.label);
           const isActive = item.href ? pathname.startsWith(item.href) : false;
           const hasActiveSubmenu = item.submenu?.some((sub) => pathname.startsWith(sub.href));
+          const Icon = item.icon;
 
           if (item.submenu) {
             return (
               <div key={item.label}>
                 <button
                   onClick={() => toggleMenu(item.label)}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    hasActiveSubmenu || isExpanded
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${hasActiveSubmenu || isExpanded
                       ? "bg-slate-800 text-white"
                       : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                  }`}
+                    }`}
                 >
                   <span className="flex items-center gap-3">
-                    <span className="text-lg">{item.icon}</span>
+                    <Icon className="h-5 w-5" />
                     {item.label}
                   </span>
-                  <svg
+                  <ChevronDown
                     className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  />
                 </button>
                 {isExpanded && (
                   <div className="ml-9 mt-1 space-y-1">
@@ -99,11 +104,10 @@ export function SidebarNav() {
                         <Link
                           key={sub.href}
                           href={sub.href}
-                          className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
-                            subActive
+                          className={`block rounded-lg px-3 py-2 text-sm transition-colors ${subActive
                               ? "bg-slate-700 font-medium text-white"
                               : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                          }`}
+                            }`}
                         >
                           {sub.label}
                         </Link>
@@ -119,13 +123,12 @@ export function SidebarNav() {
             <Link
               key={item.href}
               href={item.href!}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isActive
                   ? "bg-slate-800 text-white"
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
+                }`}
             >
-              <span className="text-lg">{item.icon}</span>
+              <Icon className="h-5 w-5" />
               {item.label}
             </Link>
           );
@@ -134,3 +137,4 @@ export function SidebarNav() {
     </aside>
   );
 }
+
