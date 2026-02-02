@@ -1,36 +1,409 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// FLEXIBILITY NOTE:
-// This configured for PostgreSQL.
-// To switch to MySQL/MariaDB: Change provider to "mysql"
-// To switch to SQLite: Change provider to "sqlite" (and remove @db.Text annotations if irrelevant)
-// To switch to SQL Server: Change provider to "sqlserver"
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// --- CORE IDENTITY MODELS (Shared) ---
+// -----------------------------------------------------
+// ENUMS
+// -----------------------------------------------------
 
-model User {
+enum Role {
+  ADMIN
+  SELLER
+  OPERATOR
+  ACCOUNTANT
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  PAYMENT_PENDING
+  PAID
+  INVOICED
+  CANCELLED
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  CHECK
+  OTHER
+}
+
+enum ProductType {
+  PRODUCT
+  SERVICE
+  RENTAL
+  TRANSPORT
+}
+
+// NCF Dominicano
+enum NcfType {
+  B01 // Credito Fiscal
+  B02 // Consumo
+  B03 // Notas de Debito
+  B04 // Notas de Credito
+  B11 // Regimenes Especiales
+  B12 // Gubernamental
+  B13 // Exportaciones
+  B14 // Para Facturas de Credito Fiscal
+  B15 // Comprobantes Gubernamentales
+  B16 // Comprobantes para Exportaciones
+}
+
+// -----------------------------------------------------
+// 1. IDENTITY & MASTER DATA
+// -----------------------------------------------------
+
+model Company {
   id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("USER") // "ADMIN", "ACCOUNTANT"
+  name      String
+  rnc       String
+  address   String
+  phone     String
+  email     String
+  logo      String?
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
+  users     User[]
+  customers Customer[]
+  products  Product[]
+  equipment Equipment[]
+  quotes    Quote[]
+  waybills  Waybill[]
+  proformas Proforma[]
+  invoices  Invoice[]
+  ncfSequences NcfSequence[]
+
+  @@map("companies")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  companyId    String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(OPERATOR)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   auditLogs AuditLog[]
+  
+  // Relations to created documents
+  createdQuotes    Quote[]
+  createdProformas Proforma[]
 
   @@map("users")
 }
 
-// --- AUDIT SYSTEM (Shared) ---
+model Customer {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  rnc       String?
+  type      String   // INDIVIDUAL, COMPANY
+  address   String?
+  phone     String?
+  email     String?
+  contact   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quotes    Quote[]
+  waybills  Waybill[]
+  proformas Proforma[]
+  invoices  Invoice[]
+
+  @@map("customers")
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  companyId   String
+  code        String?
+  name        String
+  description String?
+  type        ProductType
+  unit        String      // M3, PA, DIA, VI
+  price       Decimal     @db.Decimal(20, 2)
+  taxRate     Decimal     @default(18.00) @db.Decimal(5, 2)
+  isActive    Boolean     @default(true)
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quoteItems QuoteItem[]
+
+  @@map("products_services")
+}
+
+model Equipment {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String   // "Mini Excavadora"
+  plate     String?  // "H-93"
+  code      String?
+  type      String   // "Excavadora", "Camion"
+  isActive  Boolean  @default(true)
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  waybills Waybill[]
+
+  @@map("equipments")
+}
+
+// -----------------------------------------------------
+// 2. CORE BILLING FLOW
+// -----------------------------------------------------
+
+// 1️⃣ COTIZACIÓN (Presupuesto Global)
+model Quote {
+  id             String         @id @default(uuid())
+  number         String         @unique // COT-2024-001
+  companyId      String
+  customerId     String
+  userId         String?
+  
+  location       String?
+  issueDate      DateTime
+  validUntil     DateTime?
+  status         DocumentStatus @default(DRAFT)
+  
+  subtotal       Decimal        @default(0) @db.Decimal(20, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(20, 2)
+  total          Decimal        @default(0) @db.Decimal(20, 2)
+  
+  notes          String?        @db.Text
+  terms          String?        @db.Text
+  isCashPayment  Boolean        @default(false)
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  company   Company     @relation(fields: [companyId], references: [id])
+  customer  Customer    @relation(fields: [customerId], references: [id])
+  creator   User?       @relation(fields: [userId], references: [id])
+  items     QuoteItem[]
+  
+  // Downstream
+  waybills  Waybill[]
+  proformas Proforma[]
+  invoices  Invoice[]
+
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String   @id @default(uuid())
+  quoteId     String
+  productId   String?
+  description String
+  quantity    Decimal  @db.Decimal(10, 2)
+  unit        String?
+  price       Decimal  @db.Decimal(20, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  subtotal    Decimal  @db.Decimal(20, 2)
+  order       Int      @default(0)
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("quote_items")
+}
+
+// 2️⃣ CONDUCES (Registros de Trabajo Diario)
+model Waybill {
+  id          String   @id @default(uuid())
+  number      String   // CON-001
+  companyId   String
+  quoteId     String?
+  customerId  String?
+  equipmentId String?
+  proformaId  String?
+
+  equipmentName String?
+  plate         String?
+  workShift     String? // "4/0 TA"
+  
+  date          DateTime @db.Date
+  location      String?
+  
+  // Materiales (Specific to Construction/Transport)
+  gravelSand    Decimal? @db.Decimal(10, 2)
+  gravel        Decimal? @db.Decimal(10, 2)
+  sand          Decimal? @db.Decimal(10, 2)
+  caliche       Decimal? @db.Decimal(10, 2)
+  debris        Decimal? @db.Decimal(10, 2)
+  others        String?
+
+  total         Decimal? @db.Decimal(20, 2)
+
+  // Signatures
+  deliveredBy   String?
+  receivedBy    String?
+  
+  status        String   @default("ACTIVE")
+  isInProforma  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  quote     Quote?     @relation(fields: [quoteId], references: [id])
+  customer  Customer?  @relation(fields: [customerId], references: [id])
+  equipment Equipment? @relation(fields: [equipmentId], references: [id])
+  proforma  Proforma?  @relation(fields: [proformaId], references: [id])
+  
+  // Link to Proforma Item for traceability
+  proformaItems ProformaItem[]
+
+  @@map("waybills")
+}
+
+// 3️⃣ PROFORMA (Reporte de Seguimiento)
+model Proforma {
+  id          String         @id @default(uuid())
+  number      String         @unique
+  companyId   String
+  quoteId     String
+  customerId  String
+  userId      String?
+
+  startDate   DateTime       @db.Date
+  endDate     DateTime       @db.Date
+  issueDate   DateTime       @default(now())
+  
+  status      DocumentStatus @default(IN_PROGRESS)
+
+  totalNet    Decimal        @default(0) @db.Decimal(20, 2)
+  totalTax    Decimal        @default(0) @db.Decimal(20, 2)
+  totalGross  Decimal        @default(0) @db.Decimal(20, 2) // Net + Tax base
+  itbis       Decimal        @default(0) @db.Decimal(20, 2)
+  total       Decimal        @default(0) @db.Decimal(20, 2) // Final total
+
+  // Comparison vs Quote
+  quoteTotal       Decimal? @db.Decimal(20, 2)
+  variationAmount  Decimal? @db.Decimal(20, 2)
+  
+  observations     String?  @db.Text
+  waybillCount     Int      @default(0)
+  
+  createdAt   DateTime     @default(now())
+
+  company   Company        @relation(fields: [companyId], references: [id])
+  quote     Quote          @relation(fields: [quoteId], references: [id])
+  customer  Customer       @relation(fields: [customerId], references: [id])
+  creator   User?          @relation(fields: [userId], references: [id])
+  
+  waybills  Waybill[]
+  items     ProformaItem[]
+  invoice   Invoice?
+
+  @@map("proformas")
+}
+
+model ProformaItem {
+  id          String   @id @default(uuid())
+  proformaId  String
+  waybillId   String?  // Linked Conduce
+  
+  date        DateTime @db.Date
+  equipment   String?
+  description String
+  quantity    Decimal  @db.Decimal(10, 2)
+  unit        String?
+  price       Decimal  @db.Decimal(20, 2)
+  total       Decimal  @db.Decimal(20, 2)
+  order       Int      @default(0)
+
+  proforma Proforma @relation(fields: [proformaId], references: [id], onDelete: Cascade)
+  waybill  Waybill? @relation(fields: [waybillId], references: [id])
+
+  @@map("proforma_items")
+}
+
+// 4️⃣ FACTURA (Documento Fiscal)
+model Invoice {
+  id             String         @id @default(uuid())
+  number         String         @unique
+  companyId      String
+  proformaId     String?        @unique // One Invoice per Proforma usually
+  quoteId        String?
+  customerId     String
+  
+  ncf            String?        @unique
+  ncfType        NcfType?
+  validUntil     DateTime?      @db.Date
+  
+  issueDate      DateTime       @db.Date
+  
+  // Summarized Amounts
+  exemptAmount   Decimal        @default(0) @db.Decimal(20, 2)
+  taxableAmount  Decimal        @default(0) @db.Decimal(20, 2)
+  subtotal       Decimal        @default(0) @db.Decimal(20, 2)
+  tax            Decimal        @default(0) @db.Decimal(20, 2)
+  total          Decimal        @default(0) @db.Decimal(20, 2)
+  
+  status         DocumentStatus @default(INVOICED)
+  paymentStatus  String         @default("PAID")
+  paymentMethod  PaymentMethod?
+  
+  createdAt      DateTime       @default(now())
+
+  company   Company       @relation(fields: [companyId], references: [id])
+  proforma  Proforma?     @relation(fields: [proformaId], references: [id])
+  quote     Quote?        @relation(fields: [quoteId], references: [id])
+  customer  Customer      @relation(fields: [customerId], references: [id])
+  
+  items     InvoiceItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  description String
+  quantity    Decimal  @db.Decimal(10, 2)
+  unit        String?
+  price       Decimal  @db.Decimal(20, 2)
+  tax         Decimal  @default(0) @db.Decimal(20, 2)
+  total       Decimal  @db.Decimal(20, 2)
+  order       Int      @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model NcfSequence {
+  id              String   @id @default(uuid())
+  companyId       String
+  type            NcfType
+  serie           String   // "B"
+  currentSequence Int      @default(1)
+  finalSequence   Int
+  expirationDate  DateTime @db.Date
+  isActive        Boolean  @default(true)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("ncf_sequences")
+}
+
+// -----------------------------------------------------
+// 3. AUDIT
+// -----------------------------------------------------
 
 model AuditLog {
   id            String   @id @default(uuid())
