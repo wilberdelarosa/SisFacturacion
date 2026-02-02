@@ -15,6 +15,18 @@ async function buildServer() {
 
   app.get('/services', async () => ({ services: listServices() }));
 
+  const hopByHopHeaders = new Set([
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailers',
+    'transfer-encoding',
+    'upgrade',
+    'host',
+  ]);
+
   app.all<{
     Params: { service: string; '*': string };
   }>('/proxy/:service/*', async (request, reply) => {
@@ -47,33 +59,46 @@ async function buildServer() {
     try {
       circuit.onHalfOpenCall();
 
-      const body = request.body;
-      const hasBody = body !== undefined && body !== null && request.method !== 'GET' && request.method !== 'HEAD';
       const headers = new Headers();
-
       for (const [key, value] of Object.entries(request.headers)) {
+        const lower = key.toLowerCase();
+        if (hopByHopHeaders.has(lower)) continue;
         if (value !== undefined) {
           headers.set(key, Array.isArray(value) ? value.join(',') : String(value));
+        }
+      }
+
+      const body = request.body as unknown;
+      const hasBody = body !== undefined && body !== null && request.method !== 'GET' && request.method !== 'HEAD';
+      const contentType = request.headers['content-type']?.toLowerCase();
+
+      let payload: BodyInit | undefined;
+      if (hasBody) {
+        if (contentType?.includes('application/json')) {
+          payload = typeof body === 'string' ? body : JSON.stringify(body);
+        } else if (body instanceof Uint8Array || body instanceof Buffer || typeof body === 'string') {
+          payload = body as BodyInit;
         }
       }
 
       const response = await fetch(targetUrl, {
         method: request.method,
         headers,
-        body: hasBody ? JSON.stringify(body) : undefined,
+        body: payload,
         signal: controller.signal,
       });
-
-      const responseText = await response.text();
 
       circuit.recordSuccess();
 
       reply.status(response.status);
       response.headers.forEach((value, key) => {
-        reply.header(key, value);
+        if (!hopByHopHeaders.has(key.toLowerCase())) {
+          reply.header(key, value);
+        }
       });
 
-      return reply.send(responseText);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return reply.send(buffer);
     } catch {
       circuit.recordFailure();
 

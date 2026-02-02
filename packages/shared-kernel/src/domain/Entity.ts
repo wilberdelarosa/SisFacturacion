@@ -1,9 +1,12 @@
+import { randomUUID } from 'node:crypto';
+
 export abstract class Entity<T> {
     protected readonly _id: string;
     protected props: T;
 
     constructor(props: T, id?: string) {
-        this._id = id ? id : crypto.randomUUID();
+        const uuid = typeof randomUUID === 'function' ? randomUUID() : `${Date.now()}-${Math.random()}`;
+        this._id = id ? id : uuid;
         this.props = props;
     }
 
