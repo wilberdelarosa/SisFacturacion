@@ -11,6 +11,9 @@ importers:
       '@mermaid-js/mermaid-cli':
         specifier: ^10.9.1
         version: 10.9.1(typescript@5.9.3)
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.30
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.54.0
         version: 8.54.0(@typescript-eslint/parser@8.54.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
@@ -129,6 +132,21 @@ importers:
         version: 5.9.3
 
   packages/observability: {}
+
+  packages/sdk:
+    dependencies:
+      '@template/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@template/database':
+        specifier: workspace:*
+        version: link:../database
+      '@template/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@template/shared-kernel':
+        specifier: workspace:*
+        version: link:../shared-kernel
 
   packages/shared-kernel: {}
 
