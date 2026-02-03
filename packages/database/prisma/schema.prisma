@@ -111,6 +111,17 @@ enum PaymentConditionType {
   CREDITO
 }
 
+enum PermissionScope {
+  OWN
+  TENANT
+  ALL
+}
+
+enum GrantType {
+  ALLOW
+  DENY
+}
+
 // -----------------------------------------------------
 // 1. IDENTITY & CONFIG
 // -----------------------------------------------------
@@ -180,6 +191,7 @@ model User {
   id               String    @id @default(uuid())
   companyId        String    @map("empresa_id")
   branchId         String?   @map("sucursal_id")
+  roleId           String?   @map("rol_id")
   authUserId       String?   @map("auth_user_id") // Supabase Auth ID
   name             String    @map("nombre")
   email            String    @unique @map("correo")
@@ -201,10 +213,11 @@ model User {
   updatedAt        DateTime  @default(now()) @updatedAt @map("fecha_actualizacion")
 
   company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branch           Branch?   @relation(fields: [branchId], references: [id])
+  branch           Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  roleEntity       Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
   
   sessions         Session[]
-  permissions      UserPermission[]
+  userPermissions  UserPermission[]
   
   // Relations to created/approved docs
   createdQuotes       Quote[]          @relation("QuoteCreator")
@@ -241,47 +254,89 @@ model Session {
 }
 
 // -----------------------------------------------------
-// 2. PERMISSIONS
+// 2. PERMISSIONS & ROLES
 // -----------------------------------------------------
 
-model Permission {
+model Role {
+  id          String          @id @default(uuid())
+  key         String          @unique @map("clave")
+  name        String          @map("nombre")
+  description String?         @map("descripcion")
+  isSystem    Boolean         @default(false) @map("es_sistema")
+  createdAt   DateTime        @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime        @default(now()) @updatedAt @map("fecha_actualizacion")
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Module {
   id          String   @id @default(uuid())
-  key         String   @unique @map("clave") // module.action
-  module      String   @map("modulo")
-  action      String   @map("accion")
+  key         String   @unique @map("clave")
+  name        String   @map("nombre")
   description String?  @map("descripcion")
-  isActive    Boolean? @default(true) @map("activo")
   createdAt   DateTime @default(now()) @map("fecha_creacion")
 
+  permissions Permission[]
+
+  @@map("modulos")
+}
+
+model Action {
+  id          String   @id @default(uuid())
+  key         String   @unique @map("clave")
+  name        String   @map("nombre")
+  description String?  @map("descripcion")
+  createdAt   DateTime @default(now()) @map("fecha_creacion")
+
+  permissions Permission[]
+
+  @@map("acciones")
+}
+
+model Permission {
+  id          String          @id @default(uuid())
+  moduleId    String          @map("modulo_id")
+  actionId    String          @map("accion_id")
+  scope       PermissionScope @default(TENANT) @map("alcance")
+  description String?         @map("descripcion")
+  active      Boolean         @default(true) @map("activo")
+  createdAt   DateTime        @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime        @default(now()) @updatedAt @map("fecha_actualizacion")
+
+  module      Module          @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  action      Action          @relation(fields: [actionId], references: [id], onDelete: Cascade)
   rolePermissions RolePermission[]
   userPermissions UserPermission[]
 
+  @@unique([moduleId, actionId, scope])
   @@map("permisos")
 }
 
 model RolePermission {
-  id            String   @id @default(uuid())
-  role          UserRole @map("rol")
-  permissionId  String   @map("permiso_id")
-  assignedAt    DateTime @default(now()) @map("fecha_asignacion")
+  roleId       String      @map("rol_id")
+  permissionId String      @map("permiso_id")
+  assignedAt   DateTime    @default(now()) @map("fecha_asignacion")
 
-  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  @@unique([role, permissionId])
+  @@id([roleId, permissionId])
   @@map("roles_permisos")
 }
 
 model UserPermission {
-  id            String   @id @default(uuid())
-  userId        String   @map("usuario_id")
-  permissionId  String   @map("permiso_id")
-  type          String   @map("tipo") // allow, deny
-  assignedAt    DateTime @default(now()) @map("fecha_asignacion")
+  userId       String      @map("usuario_id")
+  permissionId String      @map("permiso_id")
+  grantType    GrantType   @default(ALLOW) @map("tipo_grant")
+  assignedAt   DateTime    @default(now()) @map("fecha_asignacion")
 
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, permissionId])
+  @@id([userId, permissionId])
   @@map("usuarios_permisos")
 }
 

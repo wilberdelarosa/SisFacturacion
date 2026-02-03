@@ -1,6 +1,5 @@
-import { registeredRoutes } from "./adapters/inbound/http/server";
+import { startMasterDataServer } from "./infrastructure/server";
 
-export const startMasterDataService = () => ({
-  name: "master-data",
-  registeredRoutes
-});
+export const startMasterDataService = startMasterDataServer;
+
+startMasterDataServer();

@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { getCircuit, getService, listServices } from './service-registry';
 
 const PORT = Number(process.env.PORT || 3001);
+const REQUIRE_AUTH = process.env.GATEWAY_REQUIRE_AUTH === 'true';
 
 async function buildServer() {
   const app = Fastify({ logger: true });
@@ -30,6 +31,16 @@ async function buildServer() {
   app.all<{
     Params: { service: string; '*': string };
   }>('/proxy/:service/*', async (request, reply) => {
+    if (REQUIRE_AUTH) {
+      const authHeader = request.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.status(401).send({
+          error: 'UNAUTHORIZED',
+          message: 'Authorization header requerido.'
+        });
+      }
+    }
+
     const serviceName = request.params.service;
     const service = getService(serviceName);
     const circuit = getCircuit(serviceName);

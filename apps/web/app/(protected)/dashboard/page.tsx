@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, ArrowUpRight, CircleDollarSign, Clock3, FileText, LineChart, Users } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
-import { currentSession } from "../../../lib/auth";
+import { currentSession, Session } from "../../../lib/auth";
+import { RoleBadge } from "../../../components/ui";
 
 type InvoiceRow = {
   id: string;
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
 
   const stats = useMemo(() => {
     const totalFacturas = invoices.length;
@@ -97,8 +99,9 @@ export default function DashboardPage() {
     }
 
     setLoading(true);
-    const session = await currentSession();
-    const empresa = session?.empresaId || process.env.NEXT_PUBLIC_DEFAULT_COMPANY_ID || null;
+    const current = await currentSession();
+    setSession(current);
+    const empresa = current?.empresaId || process.env.NEXT_PUBLIC_DEFAULT_COMPANY_ID || null;
     setEmpresaId(empresa);
 
     const query = supabase
@@ -147,6 +150,12 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
           <p className="mt-1 text-sm text-slate-600">Resumen conectado a tu base de datos</p>
         </div>
+        {session?.role ? (
+          <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2">
+            <span className="text-xs font-medium text-slate-600">Rol actual</span>
+            <RoleBadge role={session.role} />
+          </div>
+        ) : null}
       </div>
 
       {loading && !error && <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Cargando datos...</p>}

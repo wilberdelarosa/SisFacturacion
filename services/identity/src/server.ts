@@ -1,6 +1,8 @@
-import { registeredRoutes } from "./adapters/inbound/http/server";
+import dotenv from 'dotenv';
+dotenv.config();
 
-export const startIdentityService = () => ({
-  name: "identity",
-  registeredRoutes
-});
+import { startIdentityServer } from "./infrastructure/server";
+
+export const startIdentityService = startIdentityServer;
+
+startIdentityServer();

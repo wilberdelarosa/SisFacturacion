@@ -11,7 +11,8 @@ import {
   FileDigit,
   BarChart3,
   Settings,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from "lucide-react";
 
 type MenuItem = {
@@ -39,12 +40,19 @@ const menuItems: MenuItem[] = [
   { label: "NCF", href: "/ncf", icon: FileDigit },
   { label: "Reportes", href: "/reportes", icon: BarChart3 },
   {
+    label: "Administración",
+    icon: Shield,
+    submenu: [
+      { label: "Usuarios", href: "/admin/usuarios" },
+      { label: "Roles", href: "/admin/roles" },
+    ],
+  },
+  {
     label: "Configuración",
     icon: Settings,
     submenu: [
       { label: "Empresas", href: "/catalogos/empresas" },
       { label: "Sucursales", href: "/catalogos/sucursales" },
-      { label: "Usuarios", href: "/seguridad/usuarios" },
       { label: "Pagos", href: "/documentos/pagos" },
     ],
   },
