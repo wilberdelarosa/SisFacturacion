@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Modal, Input, Select, Button } from "../ui";
 import { supabase } from "../../lib/supabaseClient";
-import { currentSession } from "../../lib/auth";
+import { currentSession, isAdminRole } from "../../lib/auth";
 import { Loader2 } from "lucide-react";
 
 type UserFormData = {
@@ -42,14 +42,14 @@ type UserFormModalProps = {
   } | null;
 };
 
+/** Opciones de rol según enum RolUsuario en BD */
 const ROLE_OPTIONS = [
-  { value: "superadmin", label: "Super Administrador" },
+  { value: "super_admin", label: "Super Administrador" },
   { value: "admin", label: "Administrador" },
   { value: "gerente", label: "Gerente" },
   { value: "vendedor", label: "Vendedor" },
+  { value: "contador", label: "Contador" },
   { value: "operador", label: "Operador" },
-  { value: "contabilidad", label: "Contabilidad" },
-  { value: "auditor", label: "Auditor" },
 ];
 
 const STATUS_OPTIONS = [
@@ -109,6 +109,7 @@ export function UserFormModal({ isOpen, onClose, onSuccess, editingUser }: UserF
   }, [formData.empresa_id, formData.sucursal_id, branches]);
 
   const loadCompaniesAndBranches = async () => {
+    if (!supabase) return;
     setLoadingData(true);
     try {
       const [companiesRes, branchesRes] = await Promise.all([
@@ -172,8 +173,8 @@ export function UserFormModal({ isOpen, onClose, onSuccess, editingUser }: UserF
 
     // Validar que solo usuarios admin o superadmin puedan crear/editar usuarios
     const session = await currentSession();
-    if (!session || !["admin", "superadmin"].includes(session.role)) {
-      setErrors({ submit: "No tienes permisos para realizar esta acción. Solo usuarios Admin o SuperAdmin." });
+    if (!session || !isAdminRole(session.role)) {
+      setErrors({ submit: "No tienes permisos para realizar esta acción. Solo usuarios Admin o Super Admin." });
       return;
     }
 

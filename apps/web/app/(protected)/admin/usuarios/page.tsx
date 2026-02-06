@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { RoleBadge, Button } from "../../../../components/ui";
 import { UserPlus, Shield, Search, Filter, Edit2, Trash2, RefreshCw } from "lucide-react";
 import { supabase } from "../../../../lib/supabaseClient";
-import { currentSession } from "../../../../lib/auth";
+import { currentSession, isAdminRole } from "../../../../lib/auth";
 import { UserFormModal } from "../../../../components/admin/UserFormModal";
 import { DeleteConfirmModal } from "../../../../components/admin/DeleteConfirmModal";
 
@@ -78,8 +78,8 @@ export default function AdminUsersPage() {
     const session = await currentSession();
     if (session) {
       setCurrentUserRole(session.role);
-      if (!["admin", "superadmin"].includes(session.role)) {
-        setError("⛔ Acceso denegado. Solo usuarios Admin o SuperAdmin pueden acceder a esta sección.");
+      if (!isAdminRole(session.role)) {
+        setError("⛔ Acceso denegado. Solo usuarios Admin o Super Admin pueden acceder a esta sección.");
       }
     }
   };
@@ -90,6 +90,11 @@ export default function AdminUsersPage() {
   }, [users, searchTerm, filterRole, filterStatus]);
 
   const loadUsers = async () => {
+    if (!supabase) {
+      setError("Supabase no configurado. Configura apps/web/.env.local");
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -149,8 +154,8 @@ export default function AdminUsersPage() {
   };
 
   const handleCreateUser = () => {
-    if (!currentUserRole || !["admin", "superadmin"].includes(currentUserRole)) {
-      setError("⛔ No tienes permisos para crear usuarios. Solo usuarios Admin o SuperAdmin.");
+    if (!currentUserRole || !isAdminRole(currentUserRole)) {
+      setError("⛔ No tienes permisos para crear usuarios. Solo usuarios Admin o Super Admin.");
       return;
     }
     setEditingUser(null);
@@ -158,8 +163,8 @@ export default function AdminUsersPage() {
   };
 
   const handleEditUser = (user: User) => {
-    if (!currentUserRole || !["admin", "superadmin"].includes(currentUserRole)) {
-      setError("⛔ No tienes permisos para editar usuarios. Solo usuarios Admin o SuperAdmin.");
+    if (!currentUserRole || !isAdminRole(currentUserRole)) {
+      setError("⛔ No tienes permisos para editar usuarios. Solo usuarios Admin o Super Admin.");
       return;
     }
     setEditingUser({
@@ -175,8 +180,8 @@ export default function AdminUsersPage() {
   };
 
   const handleDeleteClick = (user: User) => {
-    if (!currentUserRole || !["admin", "superadmin"].includes(currentUserRole)) {
-      setError("⛔ No tienes permisos para eliminar usuarios. Solo usuarios Admin o SuperAdmin.");
+    if (!currentUserRole || !isAdminRole(currentUserRole)) {
+      setError("⛔ No tienes permisos para eliminar usuarios. Solo usuarios Admin o Super Admin.");
       return;
     }
     setDeletingUser(user);
@@ -187,8 +192,8 @@ export default function AdminUsersPage() {
     if (!deletingUser) return;
 
     const session = await currentSession();
-    if (!session || !["admin", "superadmin"].includes(session.role)) {
-      setError("⛔ No tienes permisos para eliminar usuarios. Solo usuarios Admin o SuperAdmin.");
+    if (!session || !isAdminRole(session.role)) {
+      setError("⛔ No tienes permisos para eliminar usuarios. Solo usuarios Admin o Super Admin.");
       setShowDeleteModal(false);
       return;
     }
@@ -278,13 +283,12 @@ export default function AdminUsersPage() {
               className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-4 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="all">Todos los roles</option>
-              <option value="superadmin">Super Administrador</option>
+              <option value="super_admin">Super Administrador</option>
               <option value="admin">Administrador</option>
               <option value="gerente">Gerente</option>
               <option value="vendedor">Vendedor</option>
+              <option value="contador">Contador</option>
               <option value="operador">Operador</option>
-              <option value="contabilidad">Contabilidad</option>
-              <option value="auditor">Auditor</option>
             </select>
           </div>
 
