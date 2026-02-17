@@ -16,9 +16,9 @@ export type Session = {
 };
 
 const isBrowser = () => typeof window !== "undefined";
-const hasSupabase = Boolean(supabase);
 
 async function fetchProfile(userId: string, email?: string | null) {
+  if (!supabase) return null;
   const matchByAuth = await supabase
     .from("usuarios")
     .select("empresa_id,sucursal_id,rol")
@@ -40,7 +40,7 @@ async function fetchProfile(userId: string, email?: string | null) {
 }
 
 export async function currentSession(): Promise<Session | null> {
-  if (!hasSupabase) return null;
+  if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   const supaSession = data.session;
   if (!supaSession?.user) return null;
@@ -51,7 +51,7 @@ export async function currentSession(): Promise<Session | null> {
     user: supaSession.user.email || "Usuario",
     email: supaSession.user.email || undefined,
     supabaseUserId: supaSession.user.id,
-    role: profile?.rol || "usuario",
+    role: profile?.rol || "operador",
     empresaId: profile?.empresa_id || undefined,
     sucursalId: profile?.sucursal_id || undefined,
     issuedAt: Date.now(),
@@ -66,8 +66,8 @@ export async function login(username: string, password: string) {
     return { ok: false as const, reason: "locked" as const };
   }
 
-  if (!hasSupabase) {
-    return { ok: false as const, reason: "config" as const, message: "Supabase no está configurado" };
+  if (!supabase) {
+    return { ok: false as const, reason: "config" as const, message: "Supabase no está configurado. Añade apps/web/.env.local con NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY." };
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({ email: username, password });
@@ -90,7 +90,7 @@ export async function login(username: string, password: string) {
     user: user?.email || username,
     email: user?.email || undefined,
     supabaseUserId: user?.id,
-    role: profile?.rol || "usuario",
+    role: profile?.rol || "operador",
     empresaId: profile?.empresa_id || undefined,
     sucursalId: profile?.sucursal_id || undefined,
     issuedAt: Date.now(),
@@ -100,7 +100,7 @@ export async function login(username: string, password: string) {
 }
 
 export async function logout() {
-  if (!hasSupabase) return;
+  if (!supabase) return;
   await supabase.auth.signOut();
   if (isBrowser()) {
     window.localStorage.removeItem(ATTEMPTS_KEY);
@@ -111,4 +111,11 @@ export function isLocked() {
   if (!isBrowser()) return false;
   const attempts = Number(window.localStorage.getItem(ATTEMPTS_KEY) || 0);
   return attempts >= MAX_ATTEMPTS;
+}
+
+/** Roles que pueden acceder a funciones de administración (coinciden con enum RolUsuario en BD) */
+export const ADMIN_ROLES = ["admin", "super_admin"] as const;
+
+export function isAdminRole(role: string): boolean {
+  return ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number]);
 }

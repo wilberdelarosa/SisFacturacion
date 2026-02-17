@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE;
+const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const DEFAULT_COMPANY = {
   name: "ALITO EIRL",
@@ -22,7 +22,12 @@ const DEFAULT_BRANCH = {
 export async function POST(req: Request) {
   try {
     if (!SUPABASE_URL || !SERVICE_ROLE) {
-      return NextResponse.json({ message: "Faltan llaves de Supabase" }, { status: 500 });
+      return NextResponse.json(
+        {
+          message: "Faltan llaves de Supabase. Añade NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE en apps/web/.env.local",
+        },
+        { status: 500 }
+      );
     }
 
     const { email, password, name } = await req.json();
@@ -105,6 +110,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: "Usuario creado", authUserId });
   } catch (err) {
-    return NextResponse.json({ message: (err as Error).message }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Error en el registro";
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined;
+    return NextResponse.json(
+      { message, ...(process.env.NODE_ENV === "development" && cause ? { cause } : {}) },
+      { status: 500 }
+    );
   }
 }

@@ -14,56 +14,14 @@ type Role = {
   permissions?: string[];
 };
 
+/** Roles según enum RolUsuario en BD */
 const predefinedRoles: Role[] = [
-  { 
-    id: "1", 
-    key: "superadmin", 
-    name: "Super Administrador", 
-    description: "Acceso total al sistema, gestión de empresas y configuración global",
-    permissions: ["all"]
-  },
-  { 
-    id: "2", 
-    key: "admin", 
-    name: "Administrador", 
-    description: "Administrador de la empresa, gestiona usuarios y configuración",
-    permissions: ["users.create", "users.edit", "users.delete", "reports.view", "settings.edit"]
-  },
-  { 
-    id: "3", 
-    key: "gerente", 
-    name: "Gerente", 
-    description: "Gerente con permisos de gestión y supervisión operativa",
-    permissions: ["invoices.create", "invoices.edit", "reports.view", "users.view"]
-  },
-  { 
-    id: "4", 
-    key: "vendedor", 
-    name: "Vendedor", 
-    description: "Usuario enfocado en ventas y atención al cliente",
-    permissions: ["invoices.create", "invoices.view", "customers.create", "customers.edit"]
-  },
-  { 
-    id: "5", 
-    key: "operador", 
-    name: "Operador", 
-    description: "Usuario operativo básico con acceso limitado",
-    permissions: ["invoices.view", "customers.view"]
-  },
-  { 
-    id: "6", 
-    key: "contabilidad", 
-    name: "Contabilidad", 
-    description: "Usuario con acceso a finanzas, reportes y auditoría",
-    permissions: ["invoices.view", "reports.view", "reports.export", "payments.view"]
-  },
-  { 
-    id: "7", 
-    key: "auditor", 
-    name: "Auditor", 
-    description: "Usuario de auditoría y revisión con acceso de solo lectura",
-    permissions: ["invoices.view", "reports.view", "users.view", "logs.view"]
-  },
+  { id: "1", key: "super_admin", name: "Super Administrador", description: "Acceso total al sistema, gestión de empresas y configuración global", permissions: ["all"] },
+  { id: "2", key: "admin", name: "Administrador", description: "Administrador de la empresa, gestiona usuarios y configuración", permissions: ["users.create", "users.edit", "users.delete", "reports.view", "settings.edit"] },
+  { id: "3", key: "gerente", name: "Gerente", description: "Gerente con permisos de gestión y supervisión operativa", permissions: ["invoices.create", "invoices.edit", "reports.view", "users.view"] },
+  { id: "4", key: "vendedor", name: "Vendedor", description: "Usuario enfocado en ventas y atención al cliente", permissions: ["invoices.create", "invoices.view", "customers.create", "customers.edit"] },
+  { id: "5", key: "contador", name: "Contador", description: "Usuario con acceso a finanzas, reportes y auditoría", permissions: ["invoices.view", "reports.view", "reports.export", "payments.view"] },
+  { id: "6", key: "operador", name: "Operador", description: "Usuario operativo básico con acceso limitado", permissions: ["invoices.view", "customers.view"] },
 ];
 
 export default function AdminRolesPage() {
@@ -92,6 +50,11 @@ export default function AdminRolesPage() {
   }, [searchTerm, roles]);
 
   const loadRoleCounts = async () => {
+    if (!supabase) {
+      setError("Supabase no configurado. Configura apps/web/.env.local");
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -307,13 +270,12 @@ export default function AdminRolesPage() {
 
 function getRoleHeaderColor(roleKey: string): string {
   const colorMap: Record<string, string> = {
-    superadmin: "bg-gradient-to-r from-red-500 to-red-600",
+    super_admin: "bg-gradient-to-r from-red-500 to-red-600",
     admin: "bg-gradient-to-r from-red-400 to-orange-500",
     gerente: "bg-gradient-to-r from-blue-500 to-blue-600",
     vendedor: "bg-gradient-to-r from-green-500 to-green-600",
+    contador: "bg-gradient-to-r from-purple-500 to-purple-600",
     operador: "bg-gradient-to-r from-slate-400 to-slate-500",
-    contabilidad: "bg-gradient-to-r from-purple-500 to-purple-600",
-    auditor: "bg-gradient-to-r from-amber-500 to-amber-600",
   };
   return colorMap[roleKey] || "bg-gradient-to-r from-slate-400 to-slate-500";
 }
